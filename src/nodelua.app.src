@@ -1,0 +1,11 @@
+{application, nodelua,
+ [{description, "Embedded Lua for Erlang"},
+  {vsn, "1.0"},
+  {registered, []},
+  {applications, [compiler,kernel,stdlib]},
+  {mod, { nodelua, []}},
+  {modules, [
+            nodelua
+  ]},
+  {env, []}]}.
+
