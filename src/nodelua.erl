@@ -1,7 +1,6 @@
 -module(nodelua).
 
--export([new/0,
-         myfunction/1]).
+-export([run/1, send/2, stop/1]).
 
 -on_load(init/0).
 
@@ -24,10 +23,13 @@ init() ->
             end,
     erlang:load_nif(filename:join(PrivDir, ?MODULE), 0).
 
-new() ->
+run(_Script) ->
     ?nif_stub.
 
-myfunction(_Ref) ->
+send(_Ref, _Message) ->
+    ?nif_stub.
+
+stop(_Ref) ->
     ?nif_stub.
 
 %% ===================================================================
@@ -36,7 +38,7 @@ myfunction(_Ref) ->
 -ifdef(TEST).
 
 basic_test() ->
-    {ok, Ref} = new(),
-    ?assertEqual(ok, myfunction(Ref)).
+    {ok, Ref} = run("print('hello world')"),
+    ?assertEqual(ok, send(Ref, ok)).
 
 -endif.
