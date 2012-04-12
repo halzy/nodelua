@@ -36,7 +36,7 @@ send(_Ref, _Message) ->
 -ifdef(TEST).
 
 basic_test() ->
-    {ok, Ref} = run("print('hello world')"),
+    {ok, Ref} = run("print('hello world')\n"),
     ?assertEqual(ok, send(Ref, ok)).
 
 -endif.
