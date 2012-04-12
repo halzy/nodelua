@@ -20,13 +20,11 @@ static ERL_NIF_TERM ATOM_LUA;
 // Prototypes
 static ERL_NIF_TERM nodelua_run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 static ERL_NIF_TERM nodelua_send(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
-static ERL_NIF_TERM nodelua_stop(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 
 static ErlNifFunc nif_funcs[] =
 {
     {"run", 1, nodelua_run},
-    {"send", 2, nodelua_send},
-    {"stop", 1, nodelua_stop}
+    {"send", 2, nodelua_send}
 };
 
 
@@ -99,14 +97,7 @@ static ERL_NIF_TERM nodelua_run(ErlNifEnv* env, int argc,
   return result;
 }
 
-static ERL_NIF_TERM nodelua_send(ErlNifEnv* env, int argc,
-                                          const ERL_NIF_TERM argv[])
-{
-    return ATOM_OK;
-}
-
-static ERL_NIF_TERM nodelua_stop(ErlNifEnv* env, int argc,
-                                          const ERL_NIF_TERM argv[])
+static ERL_NIF_TERM nodelua_send(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     return ATOM_OK;
 }

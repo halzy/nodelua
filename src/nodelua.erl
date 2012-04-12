@@ -1,6 +1,6 @@
 -module(nodelua).
 
--export([run/1, send/2, stop/1]).
+-export([run/1, send/2]).
 
 -on_load(init/0).
 
@@ -29,8 +29,6 @@ run(_Script) ->
 send(_Ref, _Message) ->
     ?nif_stub.
 
-stop(_Ref) ->
-    ?nif_stub.
 
 %% ===================================================================
 %% EUnit tests
