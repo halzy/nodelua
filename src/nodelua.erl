@@ -1,6 +1,7 @@
 -module(nodelua).
 
 -export([run/1, send/2]).
+-export([run_core/1, send_core/2]).
 
 -on_load(init/0).
 
@@ -23,10 +24,16 @@ init() ->
             end,
     erlang:load_nif(filename:join(PrivDir, ?MODULE), 0).
 
-run(_Script) ->
+run(Script) ->
+    run_core(Script).
+
+send(Lua, Message) ->
+    send_core(Lua, Message).
+
+run_core(_Script) ->
     ?nif_stub.
 
-send(_Ref, _Message) ->
+send_core(_Ref, _Message) ->
     ?nif_stub.
 
 
@@ -36,7 +43,10 @@ send(_Ref, _Message) ->
 -ifdef(TEST).
 
 basic_test() ->
-    {ok, Ref} = run("print('hello world')\n"),
+    {ok, Script} = file:read_file("../scripts/basic_test.lua"),
+    %{ok, Ref} = run("print(os.getenv('PWD'))"),
+    %{ok, Ref} = run("print(package.path)"),
+    {ok, Ref} = run_core(Script),
     ?assertEqual(ok, send(Ref, ok)).
 
 -endif.
