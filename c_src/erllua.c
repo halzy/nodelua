@@ -21,6 +21,7 @@ typedef struct lua_input_script
 
 void erllua_destroy(erllua_ptr erllua)
 {
+  printf("erllua_destroy called with %p\n", erllua);
   // TODO is there more to clean? 
   // Like gathering a result and sending it back?
   lua_close(erllua->lua);

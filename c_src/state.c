@@ -1,14 +1,17 @@
 
 #include "state.h"
 #include "erllua.h"
+#include "queue.h"
 
 #include <string.h>
+#include <stdio.h>
 
-typedef struct state
+struct state
 {
 	ErlNifThreadOpts* thread_opts;
 	ErlNifResourceType* erllua_type;
-} state_t;
+	queue_ptr work_queue;
+};
 
 typedef struct state* state_ptr;
 
@@ -30,7 +33,7 @@ ERL_NIF_TERM state_add_script(ErlNifEnv* env, const char * data, size_t size, co
 
 	if(NULL != erllua)
 	{
-		// TODO: save erllua in a queue or something for processing
+		queue_push(state->work_queue, erllua);
 	}
 
 	return result;
@@ -46,16 +49,24 @@ static void state_cleanup(ErlNifEnv* env, void* arg)
   erllua_destroy(erllua);
 }
 
+void destroy_work_queue(void* data)
+{
+	erllua_ptr erllua = (erllua_ptr) data;
+	erllua_destroy(erllua);
+}
 
 void* state_create(ErlNifEnv* env)
 {
-
-    state_ptr state = (state_ptr) enif_alloc(sizeof(state_t));
-    memset(state, '\0', sizeof(state_t));
+    state_ptr state = (state_ptr) enif_alloc(sizeof(struct state));
+    memset(state, '\0', sizeof(struct state));
 
 	ErlNifResourceType* erllua_type = enif_open_resource_type(env, NULL, "nodelua_RESOURCE",
 																&state_cleanup,
 																ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER, NULL);
+
+	state->work_queue = queue_create(&destroy_work_queue);
+	if(NULL == state->work_queue)
+		goto error;
 
 	state->erllua_type = erllua_type;
 	if(NULL == state->erllua_type)
@@ -76,6 +87,11 @@ error:
 void state_destroy(ErlNifEnv* env)
 {
 	state_ptr state = get_state(env);
+
+	if(NULL != state->work_queue)
+	{
+		queue_destroy(state->work_queue);
+	}
 	
 	if(NULL != state->thread_opts)
 	{
