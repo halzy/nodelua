@@ -11,6 +11,8 @@ struct state
 	ErlNifThreadOpts* thread_opts;
 	ErlNifResourceType* erllua_type;
 	queue_ptr work_queue;
+
+	ErlNifTid thread;
 };
 
 typedef struct state* state_ptr;
@@ -88,6 +90,12 @@ void state_destroy(ErlNifEnv* env)
 {
 	state_ptr state = get_state(env);
 
+	// destroy all the threads
+	// TODO @@@
+	void* resp;
+	queue_push(state->work_queue, NULL);
+    enif_thread_join(state->thread, &resp);
+
 	if(NULL != state->work_queue)
 	{
 		queue_destroy(state->work_queue);
@@ -104,3 +112,38 @@ void state_destroy(ErlNifEnv* env)
 		state = NULL;
 	}
 }
+
+
+
+static void* thr_main(void* state_ref)
+{
+    state_ptr state = (state_ptr) state_ref;
+    ErlNifEnv* env = enif_alloc_env();
+
+    erllua_ptr erllua = NULL;
+    while(queue_pop(state->work_queue, (void**)&erllua))
+    {
+		if(NULL != erllua)
+		{
+			int lua_state = erllua_run(erllua);
+			if(lua_state == ERLLUA_YIELD)
+			{
+				queue_push(state->work_queue, erllua);
+			}
+			enif_clear_env(env);
+		}
+    }
+
+    return NULL;
+}
+
+
+int state_add_worker(ErlNifEnv* env)
+{
+	state_ptr state = get_state(env);
+
+	printf("state_add_worker called with %p\n", state);
+
+    return enif_thread_create("", &(state->thread), thr_main, state, state->thread_opts);
+}
+

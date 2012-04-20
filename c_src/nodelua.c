@@ -60,6 +60,8 @@ static int on_load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 
   (*priv_data) = state_create(env);
 
+  state_add_worker(env);
+
   return (NULL == *priv_data) ? 1 : 0;
 }
 
