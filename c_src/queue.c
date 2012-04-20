@@ -4,6 +4,8 @@
 
 typedef struct node* node_ptr;
 
+enum INSERT_LOCATION { FRONT, END };
+
 struct node
 {
 	void* data;
@@ -65,8 +67,8 @@ void queue_destroy(queue_ptr queue)
 	free(queue);
 }
 
-int queue_push(queue_ptr queue, void * data)
 // returns 1 on success, 0 on failure
+static int queue_instert(queue_ptr queue, void* data, int location)
 {
 	node_ptr node = (node_ptr) enif_alloc(sizeof(struct node));
 
@@ -85,15 +87,35 @@ int queue_push(queue_ptr queue, void * data)
 		}
 		else
 		{
-			// append to queue
-			queue->last->next = node;
-			queue->last = node;
+			if(FRONT == location)
+			{
+				node->next = queue->first;
+				queue->first = node;
+			}
+			else
+			{
+				// append to queue
+				queue->last->next = node;
+				queue->last = node;
+			}
 		}
 		++queue->size;
 		enif_mutex_unlock(queue->lock);
 	}
 
 	return NULL == node ? 0 : 1;
+}
+
+// returns 1 on success, 0 on failure
+int queue_push(queue_ptr queue, void * data)
+{
+	return queue_instert(queue, data, END);
+}
+
+// returns 1 on success, 0 on failure
+int queue_unpop(queue_ptr queue, void *data)
+{
+	return queue_instert(queue, data, FRONT);
 }
 
 int queue_pop(queue_ptr queue, void **data)
