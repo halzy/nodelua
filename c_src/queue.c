@@ -14,12 +14,14 @@ struct node
 
 struct queue
 {
-	ErlNifMutex*        lock;
+	ErlNifMutex*	lock;
+	ErlNifCond*		cond;
+
 	void (*destroy_node)(void*);
 
-	node_ptr first;
-	node_ptr last;
-	unsigned size;
+	node_ptr	first;
+	node_ptr	last;
+	unsigned	size;
 };
 
 
@@ -28,43 +30,58 @@ queue_ptr queue_create( void (*destroy_node)(void*) )
 {
 	queue_ptr queue = (queue_ptr) enif_alloc(sizeof(struct queue));
 
-	if(NULL != queue)
-	{
-		memset(queue, '\0', sizeof(struct queue));
-		queue->lock = enif_mutex_create("queue_lock");
+	if(NULL == queue)
+		goto error;
 
-		if(NULL == queue->lock)
-		{
-			enif_free(queue);
-			queue = NULL;
-		}
-		else
-		{
-			queue->destroy_node = destroy_node;
-		}
-	}
+	memset(queue, '\0', sizeof(struct queue));
+	queue->lock = enif_mutex_create("queue_lock");
+
+	if(NULL == queue->lock)
+		goto error;
+
+	queue->cond = enif_cond_create("queue_condition");
+	if(NULL == queue->cond)
+		goto error;
 
 	return queue;
+
+error:
+
+	if(NULL != queue)
+	{
+		queue_destroy(queue);
+	}
+
+	return NULL;
 }
 
+// do not call this if there is the possibility that items
+// are still being added to the queue.
 void queue_destroy(queue_ptr queue)
 {
 	assert(NULL != queue);
 
-	if(NULL != queue->destroy_node)
+	// empty the queue, calling the destroy function for the items
+	void* node = NULL;
+	while(queue_pop_nowait(queue, &node))
 	{
-		void* node = NULL;
-		while(queue_pop(queue, &node))
+		if(NULL != queue->destroy_node)
 		{
 			queue->destroy_node(node);
 		}
 	}
 
-	// release the lock
-	enif_mutex_destroy(queue->lock);
+	if(NULL != queue->lock)
+	{
+		enif_mutex_destroy(queue->lock);
+	}
 
-	// and the queue
-	free(queue);
+	if(NULL != queue->cond)
+	{
+		enif_cond_destroy(queue->cond);
+	}
+
+	enif_free(queue);
 }
 
 // returns 1 on success, 0 on failure
@@ -101,29 +118,36 @@ static int queue_instert(queue_ptr queue, void* data, int location)
 		}
 		++queue->size;
 		enif_mutex_unlock(queue->lock);
+		enif_cond_signal(queue->cond);
 	}
 
 	return NULL == node ? 0 : 1;
 }
 
 // returns 1 on success, 0 on failure
-int queue_push(queue_ptr queue, void * data)
+int queue_push(queue_ptr queue, void* data)
 {
 	return queue_instert(queue, data, END);
 }
 
 // returns 1 on success, 0 on failure
-int queue_unpop(queue_ptr queue, void *data)
+int queue_unpop(queue_ptr queue, void* data)
 {
 	return queue_instert(queue, data, FRONT);
 }
 
-int queue_pop(queue_ptr queue, void **data)
+static int queue_pop_core(queue_ptr queue, void **data, const int wait)
 {
 	node_ptr node = NULL;
 	*data = NULL;
 
 	enif_mutex_lock(queue->lock);
+
+    while(1 == wait && 0 == queue->size)
+    {
+        enif_cond_wait(queue->cond, queue->lock);
+    }
+
 	if(queue->size > 0)
 	{
 		node = queue->first;
@@ -150,4 +174,14 @@ int queue_pop(queue_ptr queue, void **data)
 	}
 
 	return 0;
+}
+
+int queue_pop(queue_ptr queue, void **data)
+{
+	return queue_pop_core(queue, data, 1);
+}
+
+int queue_pop_nowait(queue_ptr queue, void **data)
+{
+	return queue_pop_core(queue, data, 0);
 }
