@@ -65,11 +65,9 @@ void queue_destroy(queue_ptr queue)
 	free(queue);
 }
 
-// returns 1 on success, 0 on failure, data may not be null
 int queue_push(queue_ptr queue, void * data)
+// returns 1 on success, 0 on failure
 {
-	assert(NULL != data);
-
 	node_ptr node = (node_ptr) enif_alloc(sizeof(struct node));
 
 	if(NULL != node)
