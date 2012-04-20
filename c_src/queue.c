@@ -106,7 +106,8 @@ int queue_pop(queue_ptr queue, void **data)
 	{
 		node = queue->first;
 
-		// remove from queue
+		// remove from queue, if we are shifting up the last one
+		// then we are setting the 'first' one to NULL
 		queue->first = node->next;
 
 		--queue->size;
@@ -118,6 +119,7 @@ int queue_pop(queue_ptr queue, void **data)
 	}	
 	enif_mutex_unlock(queue->lock);
 
+	// if we were able to get one, then we set the result and return
 	if(NULL != node)
 	{
 		*data = node->data;
