@@ -72,6 +72,8 @@ int queue_push(queue_ptr queue, void * data)
 
 	if(NULL != node)
 	{
+		memset(node, '\0', sizeof(struct node));
+
 		node->data = data;
 
 		enif_mutex_lock(queue->lock);
@@ -97,6 +99,7 @@ int queue_push(queue_ptr queue, void * data)
 int queue_pop(queue_ptr queue, void **data)
 {
 	node_ptr node = NULL;
+	*data = NULL;
 
 	enif_mutex_lock(queue->lock);
 	if(queue->size > 0)
