@@ -33,7 +33,7 @@ queue_ptr queue_create( void (*destroy_node)(void*) )
 	if(NULL == queue)
 		goto error;
 
-	memset(queue, '\0', sizeof(struct queue));
+	memset(queue, 0, sizeof(struct queue));
 	queue->lock = enif_mutex_create("queue_lock");
 
 	if(NULL == queue->lock)
@@ -91,7 +91,7 @@ static int queue_instert(queue_ptr queue, void* data, int location)
 
 	if(NULL != node)
 	{
-		memset(node, '\0', sizeof(struct node));
+		memset(node, 0, sizeof(struct node));
 
 		node->data = data;
 
