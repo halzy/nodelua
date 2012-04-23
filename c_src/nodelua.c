@@ -10,8 +10,6 @@
 
 /* TODO List:
 Send results back to erlang
-Ability to load a file instead of a buffer
-Create single thread to work the lua states
 Message Queue system so we can pass messages
 Create thread pool to work the lua states
 */
