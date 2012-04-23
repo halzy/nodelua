@@ -46,7 +46,7 @@ basic_test() ->
     {ok, Script} = file:read_file("../scripts/basic_test.lua"),
     %{ok, Ref} = run("print(os.getenv('PWD'))"),
     %{ok, Ref} = run("print(package.path)"),
-    {ok, Ref} = run_core(Script),
+    {ok, Ref} = run(Script),
     ?assertEqual(ok, send(Ref, ok)).
 
 -endif.
