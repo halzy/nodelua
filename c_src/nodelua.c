@@ -68,4 +68,4 @@ static void on_unload(ErlNifEnv* env, void* priv_data)
   state_destroy(env);
 }
 
-ERL_NIF_INIT(nodelua, nif_funcs, &on_load, NULL, NULL, &on_unload);
+ERL_NIF_INIT(nodelua, nif_funcs, on_load, NULL, NULL, on_unload);
