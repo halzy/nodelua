@@ -12,7 +12,7 @@ typedef struct erllua_s
 {
     lua_State *lua;
     lua_State *coroutine;
-    int state;
+    ERLLUA_STATE state;
 } erllua_t;
 
 typedef struct lua_input_script
@@ -25,16 +25,22 @@ typedef struct lua_input_script
 
 void erllua_destroy(erllua_ptr erllua)
 {
-  printf("erllua_destroy called with %p\n", erllua);
-  // TODO is there more to clean? 
-  // Like gathering a result and sending it back?
   lua_close(erllua->lua);
+  enif_free(erllua);
 }
 
 
-int erllua_run(erllua_ptr erllua)
+ERLLUA_STATE erllua_run(erllua_ptr erllua)
 {
+  // TODO @@@ if state is error, send back the error on the top
+  // of the stack
+  /*
+        result = make_error_tuple(env, ATOM_LUA, lua_tostring(coroutine, -1));
+      lua_pop(coroutine, 1);
+      lua_close(lua); 
+*/
   int result = lua_resume(erllua->coroutine, 0);
+
   switch(result)
   {
     case 0:
@@ -49,9 +55,19 @@ int erllua_run(erllua_ptr erllua)
     }
     default:
     {
-      erllua->state = ERLLUA_DONE;      
-      printf("Lua Error: %s", lua_tostring(erllua->lua, 1));
-      lua_pop(erllua->lua, 1);
+      // error case, inspect stack
+      erllua->state = ERLLUA_DONE;
+      if(result == LUA_ERRRUN)
+      {
+        // TODO @@@ this should be sent to the parent process
+        printf("Lua Error: %s\n", lua_tostring(erllua->coroutine, -1));
+        lua_pop(erllua->coroutine, -1);
+      }
+      else
+      {
+        printf("Didn't handle case %d in erllua_run\n", erllua->state);
+      }
+
       break;
     }
   }
@@ -64,7 +80,7 @@ static const char *read_input_script(lua_State *env, void *user_data, size_t *si
   lua_input_script *input = (lua_input_script *) user_data;
 
   // return NULL if we are done reading
-  if(input->done)
+  if(1 == input->done)
     return NULL;
 
   // give it all we've got and signal that we are done
@@ -75,61 +91,58 @@ static const char *read_input_script(lua_State *env, void *user_data, size_t *si
 }
 
 // returns {ok, handle} and sets erllua_result or {error, {kind, message}} and erllua_result is NULL
-ERL_NIF_TERM erllua_create(ErlNifEnv* env, ErlNifResourceType* erllua_type, const char* data, const unsigned size, const char* name, erllua_ptr *erllua_result)
+erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, const char* name)
 {
-  ERL_NIF_TERM result;
+  erllua_ptr erllua = enif_alloc(sizeof(erllua_t));
+  if(NULL == erllua)
+    goto error_create;
 
-  (*erllua_result) = NULL; // default to 'error'
+  memset(erllua, 0, sizeof(erllua_t));
+  erllua->state = ERLLUA_INIT;
 
   // create a new lua state and only attach it to erlang on success
-  lua_State *lua = luaL_newstate();
-  if(NULL == lua)
-  {
-    return make_error_tuple(env, ATOM_LUA, "Could not create a new lua state");
-  }
+  erllua->lua = luaL_newstate();
+  if(NULL == erllua->lua)
+    goto error_create;
 
-  lua_State *coroutine = lua_newthread(lua);
+  erllua->coroutine = lua_newthread(erllua->lua);
+  if(NULL == erllua->coroutine)
+    goto error_create;
 
-  luaL_openlibs(coroutine);
-
+  luaL_openlibs(erllua->coroutine);
   lua_input_script input_script = { .data = data, .size = size, .done = 0 };
 
   // Load the command and try to execute it... we don't want to hold onto
   // the binary longer than this, so give it to lua and store it as lua
   // runtime script
-  if (0 == lua_load(coroutine, read_input_script, &input_script, name))
+  int load_result = lua_load(erllua->coroutine, read_input_script, &input_script, name);
+  switch(load_result)
   {
-    // since everythin was initialized with lua, bind it to the erlang 
-    // system by creating the registered type and attaching the lua state
-    erllua_ptr erllua = enif_alloc_resource(erllua_type, sizeof(erllua_t));
-    if(NULL != erllua)
+    case 0:
     {
-      memset(erllua, '\0', sizeof(erllua_t));
-
-      // associate lua with the return value
       erllua->state = ERLLUA_START;
-      erllua->lua = lua;
-      erllua->coroutine = coroutine;
-
-      ERL_NIF_TERM erllua_handle = enif_make_resource(env, erllua);
-      // release our reference to the new erlang variable
-      enif_release_resource(erllua);
-
-      result = enif_make_tuple2(env, ATOM_OK, erllua_handle);
-      *erllua_result = erllua;
+      break;
     }
-    else
+    case LUA_ERRSYNTAX:
     {
-      result = make_error_tuple(env, ATOM_MEMORY, "enif_alloc_resource returned NULL");
-      lua_close(lua);
+      erllua->state = ERLLUA_ERROR;
+      break;
+    }
+    case LUA_ERRMEM:
+    {
+      goto error_create;
+      break;
     }
   }
-  else
+
+  return erllua;
+
+error_create:
+
+  if(NULL != erllua)
   {
-    result = make_error_tuple(env, ATOM_LUA, lua_tostring(lua, -1));
-    lua_pop(lua, 1); /* pop error message from the stack */
-    lua_close(lua); 
+    erllua_destroy(erllua);
   }
 
-  return result;
+  return NULL;
 }
