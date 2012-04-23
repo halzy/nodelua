@@ -49,13 +49,11 @@ static ERL_NIF_TERM nodelua_run_core(ErlNifEnv* env, int argc, const ERL_NIF_TER
 
 static ERL_NIF_TERM nodelua_send_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    return ATOM_OK;
+  return ATOM_OK;
 }
 
 static int on_load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 {
-  printf("on_load called with %p\n", *priv_data);
-
   nl_util_init_atoms(env);
 
   (*priv_data) = state_create(env);
@@ -67,8 +65,6 @@ static int on_load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 
 static void on_unload(ErlNifEnv* env, void* priv_data)
 {
-  printf("on_unload called with %p\n Please finish on_unload!", priv_data);
-
   state_destroy(env);
 }
 
