@@ -47,7 +47,28 @@ static ERL_NIF_TERM nodelua_run_core(ErlNifEnv* env, int argc, const ERL_NIF_TER
 
 static ERL_NIF_TERM nodelua_send_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-  return ATOM_OK;
+  ERL_NIF_TERM result;
+
+  if(2 == argc)
+  {
+    const ERL_NIF_TERM resource = argv[0];
+    const ERL_NIF_TERM message = argv[1];
+
+    if(state_send_message(env, resource, message))
+    {
+      result = ATOM_OK;
+    }
+    else
+    {
+      result = enif_make_badarg(env);
+    }    
+  }
+  else
+  {
+    result = enif_make_badarg(env);
+  }
+
+  return result;
 }
 
 static int on_load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)

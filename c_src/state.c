@@ -11,10 +11,19 @@
 typedef struct resource* resource_ptr;
 typedef struct work* work_ptr;
 
+typedef enum WORK_STATES 
+{
+	WORK_ENQUEUED,
+	WORK_WAIT
+} WORK_STATE;
+
 struct work
 {
 	erllua_ptr erllua;
 	resource_ptr resource;
+
+	ErlNifRWLock* rwlock;
+	WORK_STATE run_state;
 };
 
 struct resource
@@ -38,6 +47,65 @@ static state_ptr get_state(ErlNifEnv* env)
 	return (state_ptr) enif_priv_data(env);
 }
 
+static void destroy_work(void* data)
+{
+	work_ptr work = (work_ptr) data;
+	
+	enif_rwlock_rwlock(work->rwlock);
+	if(NULL != work->resource)
+	{
+		// let the GC system know that we are already gone 
+		work->resource->work = NULL;
+	}
+	enif_rwlock_rwlock(work->rwlock);
+
+	if(NULL != work->erllua)
+	{
+		erllua_destroy(work->erllua);
+	}
+
+	if(NULL != work->rwlock)
+	{
+		enif_rwlock_destroy(work->rwlock);
+	}
+
+	enif_free(work);
+}
+
+static work_ptr create_work(ErlNifEnv* env, const char * data, size_t size, const char * name)
+{
+	// allocate the actual work unit, this is pointed to by the resource
+	// and we will know that all references have been removed from this
+	// work unit when the resource destructor is called
+	work_ptr work = (work_ptr) enif_alloc(sizeof(struct work));
+	if(NULL == work)
+		goto error_create_work;
+
+	memset(work, 0, sizeof(struct work));
+
+	work->run_state = WORK_WAIT;
+
+	work->rwlock = enif_rwlock_create("work unit lock");
+	if(NULL == work->rwlock)
+		goto error_create_work;
+
+	// put a new erllua into it. If there is a script error we will find out
+	// later when a thread processes the script
+	work->erllua = erllua_create(env, data, size, name); 
+	if(NULL == work->erllua)
+		goto error_create_work;
+
+	return work;
+
+error_create_work:
+	if(NULL != work)
+	{
+		destroy_work(work);
+	}
+
+	return NULL;
+}
+
 ERL_NIF_TERM state_add_script(ErlNifEnv* env, const char * data, size_t size, const char * name)
 {
 	ERL_NIF_TERM result;
@@ -47,26 +115,20 @@ ERL_NIF_TERM state_add_script(ErlNifEnv* env, const char * data, size_t size, co
 	// assocate the resource type that will be GC'd in erlang
 	resource_ptr resource = enif_alloc_resource(state->resource_type, sizeof(struct resource));
 	if(NULL == resource)
+	{
+		result = make_error_tuple(env, ATOM_MEMORY, "enif_alloc_resource() returned NULL");
 		goto error_add_script;
+	}
 
 	// clear it out
 	memset(resource, 0, sizeof(struct resource));
 
-	// allocate the actual work unit, this is pointed to by the resource
-	// and we will know that all references have been removed from this
-	// work unit when the resource destructor is called
-	resource->work = (work_ptr) enif_alloc(sizeof(struct work));
+	resource->work = create_work(env, data, size, name);
 	if(NULL == resource->work)
+	{
+		result = make_error_tuple(env, ATOM_MEMORY, "error creating work unit");
 		goto error_add_script;
-
-	memset(resource->work, 0, sizeof(struct work));
-
-	// put a new erllua into it. If there is a script error we will find out
-	// later when a thread processes the script
-	resource->work->erllua = erllua_create(env, data, size, name); 
-	if(NULL == resource->work->erllua)
-		goto error_add_script;
-
+	}
 	// they know about each other and will null out their 
 	// reference in the other when destroyed
 	resource->work->resource = resource;
@@ -79,26 +141,18 @@ ERL_NIF_TERM state_add_script(ErlNifEnv* env, const char * data, size_t size, co
 	enif_release_resource(resource);
 	result = enif_make_tuple2(env, ATOM_OK, resource_handle);
 
-	queue_push(state->work_queue, resource->work);
-
 	return result;
 
 error_add_script:
 
-	if(NULL == resource)
-	{
-		result = make_error_tuple(env, ATOM_MEMORY, "enif_alloc_resource() returned NULL");
-	}
-	else if(NULL == resource->work)
-	{
-		result = make_error_tuple(env, ATOM_MEMORY, "enif_alloc() returned NULL");
-	}
-	else if(NULL == resource->work->erllua)
+	if(NULL != resource)
 	{
 		// if we failed to make the erllua, we need to free the 'work'
-		// we do not need to free the 'resource' because it will be GC'd
-		enif_free(resource->work);
-		result = make_error_tuple(env, ATOM_LUA, "Could not create a new lua state");
+		// we do not need to free the 'resource' because it will be GC'd		
+		if(NULL != resource->work)
+		{
+			destroy_work(resource->work);
+		}
 	}
 
 	// note that we are not cleaning up the resource here, it will
@@ -119,22 +173,12 @@ static void resource_gc(ErlNifEnv* env, void* arg)
 	// let the work know that the resource is gone and it should be shut down too
 	if(NULL != resource->work)
 	{
-		resource->work->resource = NULL; 
+		enif_rwlock_rwlock(resource->work->rwlock);
+		resource->work->resource = NULL;
+		enif_rwlock_rwunlock(resource->work->rwlock);
 	}
 }
 
-void destroy_work(void* data)
-{
-	work_ptr work = (work_ptr) data;
-	
-	if(NULL != work->resource)
-	{
-		work->resource->work = NULL;
-	}
-
-	erllua_destroy(work->erllua);
-	enif_free(work);
-}
 
 void* state_create(ErlNifEnv* env)
 {
@@ -191,6 +235,23 @@ void state_destroy(ErlNifEnv* env)
 }
 
 
+int enqueue_work(state_ptr state, work_ptr work)
+{
+	int result = 0;
+
+	enif_rwlock_rlock(work->rwlock);
+	if(WORK_WAIT == work->run_state)
+	{
+		result = queue_push(state->work_queue, work);
+		work->run_state = WORK_ENQUEUED;
+	}
+	enif_rwlock_runlock(work->rwlock);	
+
+	return result;
+}
+
+
+
 static void* thread_main(void* state_ref)
 {
     state_ptr state = (state_ptr) state_ref;
@@ -201,25 +262,35 @@ static void* thread_main(void* state_ref)
     {
 		if(NULL != work)
 		{
+			enif_rwlock_rwlock(work->rwlock);
+			work->run_state = WORK_WAIT;
+			enif_rwlock_rwunlock(work->rwlock);
+
 			int lua_state = erllua_run(work->erllua);
 
 			// items in the work queue may be GC'd by erlang, this is
 			// signaled by the resource property being set to NULL
-			if(NULL == work->resource)
+			enif_rwlock_rlock(work->rwlock);
+			int destroy = (NULL == work->resource);
+			enif_rwlock_runlock(work->rwlock);
+
+			if(destroy)
 			{
 				destroy_work(work);
 			}
 			else
 			{
-				if(lua_state == ERLLUA_YIELD)
+				if(ERLLUA_YIELD == lua_state)
 				{
-					queue_push(state->work_queue, work);
+					enqueue_work(state, work);
 				}
 			}
 		}
     }
 
     enif_free_env(env);
+
+    enif_thread_exit(NULL);
 
     return NULL;
 }
@@ -232,3 +303,27 @@ int state_add_worker(ErlNifEnv* env)
     return enif_thread_create("", &(state->thread), thread_main, state, state->thread_opts);
 }
 
+int state_send_message(ErlNifEnv* env, ERL_NIF_TERM resource_term, ERL_NIF_TERM message)
+{
+	state_ptr state = get_state(env);
+
+	resource_ptr resource = NULL;
+
+	int result = enif_get_resource(env, resource_term, state->resource_type, (void**)&resource);
+	if(result)
+	{
+		result = erllua_send_message(resource->work->erllua, message);
+		if(result)
+		{	
+			enif_rwlock_rlock(resource->work->rwlock);
+			if(WORK_WAIT == resource->work->run_state)
+			{
+				queue_push(state->work_queue, resource->work);
+				resource->work->run_state = WORK_ENQUEUED;
+			}
+			enif_rwlock_runlock(resource->work->rwlock);
+		}
+	}
+
+	return result;
+}
