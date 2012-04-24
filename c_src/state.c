@@ -255,40 +255,37 @@ int enqueue_work(state_ptr state, work_ptr work)
 static void* thread_main(void* state_ref)
 {
     state_ptr state = (state_ptr) state_ref;
-    ErlNifEnv* env = enif_alloc_env();
 
     work_ptr work = NULL;
     while(queue_pop(state->work_queue, (void**)&work))
     {
-		if(NULL != work)
+    	if(NULL == work)
+    		break;
+
+		enif_rwlock_rwlock(work->rwlock);
+		work->run_state = WORK_WAIT;
+		enif_rwlock_rwunlock(work->rwlock);
+
+		int lua_state = erllua_run(work->erllua);
+
+		// items in the work queue may be GC'd by erlang, this is
+		// signaled by the resource property being set to NULL
+		enif_rwlock_rlock(work->rwlock);
+		int destroy = (NULL == work->resource);
+		enif_rwlock_runlock(work->rwlock);
+
+		if(destroy)
 		{
-			enif_rwlock_rwlock(work->rwlock);
-			work->run_state = WORK_WAIT;
-			enif_rwlock_rwunlock(work->rwlock);
-
-			int lua_state = erllua_run(work->erllua);
-
-			// items in the work queue may be GC'd by erlang, this is
-			// signaled by the resource property being set to NULL
-			enif_rwlock_rlock(work->rwlock);
-			int destroy = (NULL == work->resource);
-			enif_rwlock_runlock(work->rwlock);
-
-			if(destroy)
+			destroy_work(work);
+		}
+		else
+		{
+			if(ERLLUA_YIELD == lua_state)
 			{
-				destroy_work(work);
-			}
-			else
-			{
-				if(ERLLUA_YIELD == lua_state)
-				{
-					enqueue_work(state, work);
-				}
+				enqueue_work(state, work);
 			}
 		}
     }
-
-    enif_free_env(env);
 
     enif_thread_exit(NULL);
 
