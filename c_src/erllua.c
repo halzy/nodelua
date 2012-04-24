@@ -49,9 +49,9 @@ ERLLUA_STATE erllua_run(erllua_ptr erllua)
   // TODO @@@ if state is error, send back the error on the top
   // of the stack
   /*
-        result = make_error_tuple(env, ATOM_LUA, lua_tostring(coroutine, -1));
-      lua_pop(coroutine, 1);
-      lua_close(lua); 
+  result = make_error_tuple(env, ATOM_LUA, lua_tostring(coroutine, -1));
+  lua_pop(coroutine, 1);
+  lua_close(lua); 
 */
   // swap the message queues, make the incoming the processing one
   message_queue_process_begin(erllua->messages);  
