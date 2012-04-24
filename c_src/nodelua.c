@@ -9,8 +9,10 @@
 #include <assert.h>
 
 /* TODO List:
-Send results back to erlang
 Message Queue system so we can pass messages
+Embed a function in lua to get the terms from the message queue.
+Embed a function in lua so it can send messages.
+Send lua error results back to erlang
 Create thread pool to work the lua states
 */
 
