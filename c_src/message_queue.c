@@ -114,15 +114,20 @@ int message_queue_push(message_queue_ptr messages, ERL_NIF_TERM message)
   return result;
 }
 
-int message_queue_pop( message_queue_ptr messages, ERL_NIF_TERM *message)
+int message_queue_pop( message_queue_ptr messages, ERL_NIF_TERM *message, ErlNifEnv** env)
 {
   ERL_NIF_TERM *message_copy;
   enif_rwlock_rlock(messages->swap_lock);
   int had_item = queue_pop_nowait(messages->processing, (void**)&message_copy);
+  *env = messages->env_processing;
   enif_rwlock_runlock(messages->swap_lock);
   if(had_item)
   {
     *message = destroy_message(message_copy);
+  }
+  else
+  {
+    *env = NULL;
   }
 
   return had_item;
