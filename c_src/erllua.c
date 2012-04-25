@@ -48,17 +48,18 @@ ERLLUA_STATE erllua_run(erllua_ptr erllua)
 {
   // TODO @@@ if state is error, send back the error on the top
   // of the stack
-  /*
-  result = make_error_tuple(env, ATOM_LUA, lua_tostring(coroutine, -1));
-  lua_pop(coroutine, 1);
-  lua_close(lua); 
-*/
+  if(ERLLUA_ERROR == erllua->state)
+  {
+    //result = make_error_tuple(env, ATOM_LUA, lua_tostring(coroutine, -1));
+    printf("LUA_ERROR: %s\n", lua_tostring(erllua->coroutine, -1));
+    lua_pop(erllua->coroutine, 1);
+    //lua_close(lua);
+  }
+
   // swap the message queues, make the incoming the processing one
   message_queue_process_begin(erllua->messages);  
-  
   // lua is expected to empty the message queue
   int result = lua_resume(erllua->coroutine, 0);
-
   // clear the environmest for the queue to let erlang GC some unused terms
   message_queue_process_end(erllua->messages);
 
