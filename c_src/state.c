@@ -235,12 +235,12 @@ void state_destroy(ErlNifEnv* env)
 }
 
 
-int enqueue_work(state_ptr state, work_ptr work)
+int enqueue_work_if(WORK_STATE work_state, state_ptr state, work_ptr work)
 {
 	int result = 0;
 
 	enif_rwlock_rlock(work->rwlock);
-	if(WORK_WAIT == work->run_state)
+	if(work_state == work->run_state)
 	{
 		result = queue_push(state->work_queue, work);
 		work->run_state = WORK_ENQUEUED;
@@ -282,7 +282,7 @@ static void* thread_main(void* state_ref)
 		{
 			if(ERLLUA_YIELD == lua_state)
 			{
-				enqueue_work(state, work);
+				enqueue_work_if( WORK_ENQUEUED, state, work);
 			}
 		}
     }
@@ -305,20 +305,13 @@ int state_send_message(ErlNifEnv* env, ERL_NIF_TERM resource_term, ERL_NIF_TERM 
 	state_ptr state = get_state(env);
 
 	resource_ptr resource = NULL;
-
 	int result = enif_get_resource(env, resource_term, state->resource_type, (void**)&resource);
 	if(result)
 	{
 		result = erllua_send_message(resource->work->erllua, message);
 		if(result)
 		{	
-			enif_rwlock_rlock(resource->work->rwlock);
-			if(WORK_WAIT == resource->work->run_state)
-			{
-				queue_push(state->work_queue, resource->work);
-				resource->work->run_state = WORK_ENQUEUED;
-			}
-			enif_rwlock_runlock(resource->work->rwlock);
+			enqueue_work_if( WORK_WAIT, state, resource->work);
 		}
 	}
 
