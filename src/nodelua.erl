@@ -47,4 +47,9 @@ basic_test() ->
     {ok, Ref} = run(Script),
     ?assertEqual(ok, send(Ref, ok)).
 
+message_send_test() ->
+    {ok, Script} = file:read_file("../scripts/incoming_message.lua"),
+    {ok, Ref} = run(Script),
+    ?assertEqual(ok, send(Ref, 1234.5678)).
+
 -endif.
