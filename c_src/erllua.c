@@ -2,6 +2,7 @@
 #include "nl_util.h"
 #include "queue.h"
 #include "message_queue.h"
+#include "mailbox.h"
 
 #include <erl_nif.h>
 #include <lua.h>
@@ -161,6 +162,11 @@ erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, 
       break;
     }
   }
+
+  // add my libs here
+  lua_pushcfunction(erllua->coroutine, luaopen_mailbox);
+  lua_pushlightuserdata(erllua->coroutine, erllua->messages);
+  lua_call(erllua->coroutine, 1, 0);
 
   return erllua;
 
