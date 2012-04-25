@@ -17,8 +17,6 @@ typedef struct erllua* erllua_ptr;
 void erllua_destroy(erllua_ptr erllua);
 erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, const char* name);
 ERLLUA_STATE erllua_run(erllua_ptr erllua);
-ERLLUA_STATE erllua_state_set(erllua_ptr erllua, ERLLUA_STATE state);
-
 int erllua_send_message(erllua_ptr erllua, ERL_NIF_TERM message);
 
 #endif
