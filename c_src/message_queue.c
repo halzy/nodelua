@@ -133,8 +133,15 @@ int message_queue_pop( message_queue_ptr messages, ERL_NIF_TERM *message)
 void message_queue_process_end(message_queue_ptr messages)
 {
   ERL_NIF_TERM test;
-  enif_rwlock_rwlock(messages->swap_lock);
-  int had_item = message_queue_pop(messages, &test);
+  ErlNifEnv* env;
+
+  // using a read lock here so that we can also call _pop.
+  // this is safe because of how it is used, we are modifying
+  // the env but since the queue 'should' be empty and have
+  // no readers since this same thread would have run the
+  // lua instance which pop'd the messages. 
+  enif_rwlock_rlock(messages->swap_lock);
+  int had_item = message_queue_pop(messages, &test, &env);
   if(!had_item)
   {
     enif_clear_env(messages->env_processing);
@@ -143,6 +150,6 @@ void message_queue_process_end(message_queue_ptr messages)
   {
     printf("ERROR: PROCESSING QUEUE WAS NOT EMPTY!\n");
   }
-  enif_rwlock_rwunlock(messages->swap_lock);
+  enif_rwlock_runlock(messages->swap_lock);
 }
 
