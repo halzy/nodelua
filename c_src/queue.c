@@ -34,6 +34,8 @@ queue_ptr queue_create( void (*destroy_node)(void*) )
 		goto error;
 
 	memset(queue, 0, sizeof(struct queue));
+	queue->destroy_node = destroy_node;
+	
 	queue->lock = enif_mutex_create("queue_lock");
 
 	if(NULL == queue->lock)
