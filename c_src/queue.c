@@ -87,7 +87,7 @@ void queue_destroy(queue_ptr queue)
 }
 
 // returns 1 on success, 0 on failure
-static int queue_instert(queue_ptr queue, void* data, int location)
+static int queue_insert(queue_ptr queue, void* data, int location)
 {
 	node_ptr node = (node_ptr) enif_alloc(sizeof(struct node));
 
@@ -119,6 +119,7 @@ static int queue_instert(queue_ptr queue, void* data, int location)
 			}
 		}
 		++queue->size;
+
 		enif_mutex_unlock(queue->lock);
 		enif_cond_signal(queue->cond);
 	}
@@ -129,13 +130,13 @@ static int queue_instert(queue_ptr queue, void* data, int location)
 // returns 1 on success, 0 on failure
 int queue_push(queue_ptr queue, void* data)
 {
-	return queue_instert(queue, data, END);
+	return queue_insert(queue, data, END);
 }
 
 // returns 1 on success, 0 on failure
 int queue_unpop(queue_ptr queue, void* data)
 {
-	return queue_instert(queue, data, FRONT);
+	return queue_insert(queue, data, FRONT);
 }
 
 static int queue_pop_core(queue_ptr queue, void **data, const int wait)
