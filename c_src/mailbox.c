@@ -7,12 +7,24 @@
 
 #define MESSAGES "messages"
 
-static int next_message(lua_State* lua)
+static message_queue_ptr get_messages(lua_State* lua)
 {
+	// stack: -
 	lua_getfield(lua, LUA_ENVIRONINDEX, MESSAGES);
+	// stack: userdata(messages)
 	message_queue_ptr messages = (message_queue_ptr) lua_touserdata(lua, -1);
+	// stack: -
 	lua_pop(lua, 1);
 
+	return messages;
+}
+
+static int next_message(lua_State* lua)
+{
+	// stack: -
+	message_queue_ptr messages = get_messages(lua);
+
+	// stack: -
 	ErlNifEnv* env;
 	ERL_NIF_TERM message;
 	int had_message  = message_queue_pop( messages, &message, &env);
@@ -24,19 +36,38 @@ static int next_message(lua_State* lua)
 	{
 		lua_pushnil(lua);
 	}
+
+	// stack: nil || message
+
 	return 1;
+}
+
+static int send_message(lua_State* lua)
+{
+	// stack: -
+	message_queue_ptr messages = get_messages(lua);
+
+	// who do we send the message to?
+
+	return 0;
 }
 
 static const struct luaL_Reg mailbox [] = {
 	{"next", next_message},
+	{"send", send_message},
 	{NULL, NULL}
 };
 
 LUALIB_API int luaopen_mailbox(lua_State *lua)
 {
 	// stack: userdata(mailbox)
+	terminator_create_types(lua);
+
+	// stack: userdata(mailbox)
 	lua_newtable (lua);
 	lua_replace (lua, LUA_ENVIRONINDEX);
+
+	// stack: userdata(mailbox)
 	luaL_register(lua, "mailbox", mailbox);
 
 	// stack: userdata(mailbox), table(mailbox)

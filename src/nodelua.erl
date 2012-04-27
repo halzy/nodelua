@@ -50,6 +50,18 @@ basic_test() ->
 message_send_test() ->
     {ok, Script} = file:read_file("../scripts/incoming_message.lua"),
     {ok, Ref} = run(Script),
-    ?assertEqual(ok, send(Ref, 1234.5678)).
+    ?assertEqual(ok, send(Ref, ok)),
+    ?assertEqual(ok, send(Ref, <<"mkay">>)),
+    ?assertEqual(ok, send(Ref, [])),
+    ?assertEqual(ok, send(Ref, [ok, {something, foobar}, {{type, point}, {x, 1}, {y, 2}}])),
+    ?assertEqual(ok, send(Ref, 2)),
+    ?assertEqual(ok, send(Ref, -2)),
+    ?assertEqual(ok, send(Ref, -0.2)),
+    ?assertEqual(ok, send(Ref, 0.2)),
+    ?assertEqual(ok, send(Ref, fun(A) -> A end)),
+    ?assertEqual(ok, send(Ref, self())),
+    ?assertEqual(ok, send(Ref, Ref)),
+    ?assertEqual(ok, send(Ref, {ok, tuple, {something, other}, bla})),
+    receive after 1000 -> true end.
 
 -endif.
