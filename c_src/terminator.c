@@ -7,6 +7,16 @@
 #include <string.h>
 
 #define TYPE_PID "nodelua.terminator.pid"
+#define TYPE_REF "nodelua.terminator.ref"
+
+static const char* types[] = 
+{
+	TYPE_PID,
+	TYPE_REF,
+	0
+};
+
+#define ERROR_STACK_MESSAGE "Could not grow stack large enough to read message."
 
 static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env);
 
@@ -24,6 +34,7 @@ static inline int push_nif_atom(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv*
 		{
 			if(enif_get_atom(env, message, atom, atom_length, ERL_NIF_LATIN1))
 			{
+				luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 				lua_pushlstring(lua, (const char*)atom, atom_length);
 				result = 1;
 			}
@@ -39,6 +50,7 @@ static inline int push_nif_binary(lua_State* lua, ERL_NIF_TERM message, ErlNifEn
 	ErlNifBinary binary;
 	if(enif_inspect_binary(env, message, &binary))
 	{
+		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_pushlstring(lua, (const char*)binary.data, binary.size);
 		result = 1;
 	}
@@ -55,6 +67,7 @@ static inline int push_nif_number(lua_State* lua, ERL_NIF_TERM message, ErlNifEn
     unsigned long ulongval;
     double doubleval;
 
+	luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
     if(enif_get_int(env, message, &intval))
     {
     	lua_pushnumber(lua, (double) intval);
@@ -110,6 +123,7 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 			++array_count;
 		}
 
+		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_createtable(lua, array_count, map_count);
 		int table_index = 0;
 		for(tuple_index = 0; tuple_index < arity; ++tuple_index)
@@ -132,6 +146,28 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 			lua_rawseti(lua, -2, table_index++);
 		}
 	}
+}
+
+static void push_nif_pid(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
+{
+	luaL_checkstack(lua, 2, ERROR_STACK_MESSAGE);
+
+	ErlNifPid *pid = (ErlNifPid *)lua_newuserdata(lua, sizeof(ErlNifPid));
+	if(enif_get_local_pid(env, message, pid))
+	{
+		luaL_getmetatable(lua, TYPE_PID);
+		lua_setmetatable(lua, -2);
+	}
+}
+
+static void push_nif_ref(lua_State* lua, ERL_NIF_TERM message)
+{
+	luaL_checkstack(lua, 2, ERROR_STACK_MESSAGE);
+
+	ERL_NIF_TERM *ref = (ERL_NIF_TERM *)lua_newuserdata(lua, sizeof(ERL_NIF_TERM));
+	*ref = message;
+	luaL_getmetatable(lua, TYPE_REF);
+	lua_setmetatable(lua, -2);
 }
 
 static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
@@ -157,6 +193,7 @@ static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
 			++array_count;
 		}
 
+		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_createtable(lua, array_count, map_count);
 
 		tail = list;
@@ -201,6 +238,7 @@ static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 	{
 		if(enif_is_empty_list(env, message))
 		{
+			luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 			lua_newtable(lua);
 		}
 		else
@@ -214,60 +252,42 @@ static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 	{
 		push_nif_number(lua, message, env);
 	}
-	else if(enif_is_pid(env, message))
-	{
-		printf("#pid\n");
-		lua_pushliteral(lua, "unknown");
-	}
 	else if(enif_is_tuple(env, message))
 	{
-		printf("#tuple\n");
 		push_nif_tuple(lua, message, env);
+	}
+	else if(enif_is_pid(env, message))
+	{
+		push_nif_pid(lua, message, env);
+	}
+	else if(enif_is_ref(env, message))
+	{
+		push_nif_ref(lua, message);
 	}
 	else if(enif_is_exception(env, message))
 	{
 		printf("#exception\n");
-		lua_pushliteral(lua, "unknown");
+		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
+		lua_pushliteral(lua, "exception transcoding not supported");
 	}
 	else if(enif_is_fun(env, message))
 	{
 		printf("#fun\n");
-		lua_pushliteral(lua, "unknown");
+		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
+		lua_pushliteral(lua, "erlang function reference passing is not supported");
 	}
 	else if(enif_is_port(env, message))
 	{
 		printf("#port\n");
-		lua_pushliteral(lua, "unknown");
-	}
-	else if(enif_is_ref(env, message))
-	{
-		printf("#ref\n");
-		lua_pushliteral(lua, "unknown");
+		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
+		lua_pushliteral(lua, "erlang port transcoding not supported");
 	}
 }
 
 void terminator_tolua(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 {
 	push_nif_term(lua, message, env);
-	/*
-	if(enif_is_number(env, message))
-	{
-		double value;
-		enif_get_double(env, message, &value);
-		lua_pushnumber(lua, value);
-	}
-	else
-	{
-		lua_pushnil(lua);
-	}
-	*/
 }
-
-static const char* types[] = 
-{
-	TYPE_PID,
-	0
-};
 
 void terminator_create_types(lua_State* lua)
 {

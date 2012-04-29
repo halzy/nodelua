@@ -59,6 +59,7 @@ message_send_test() ->
     ?assertEqual(ok, send(Ref, -0.2)),
     ?assertEqual(ok, send(Ref, 0.2)),
     ?assertEqual(ok, send(Ref, fun(A) -> A end)),
+    ?assertEqual(ok, send(Ref, erlang:make_ref())),
     ?assertEqual(ok, send(Ref, self())),
     ?assertEqual(ok, send(Ref, Ref)),
     ?assertEqual(ok, send(Ref, {ok, tuple, {something, other}, bla})),
