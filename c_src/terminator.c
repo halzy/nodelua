@@ -129,7 +129,7 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 		int table_index = 0;
 		for(tuple_index = 0; tuple_index < arity; ++tuple_index)
 		{
-			int tuple_arity = 0;
+			int tuple_arity = 1;
 			const ERL_NIF_TERM* tuple_terms;
 
 			if(enif_get_tuple(env, terms[tuple_index], &tuple_arity, &tuple_terms))
@@ -201,7 +201,7 @@ static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
 		int index = 0;
 		while(enif_get_list_cell(env, tail, &head, &tail))
 		{
-			int tuple_arity = 0;
+			int tuple_arity = 1;
 			const ERL_NIF_TERM* tuple_terms;
 
 			if(enif_get_tuple(env, head, &tuple_arity, &tuple_terms))
