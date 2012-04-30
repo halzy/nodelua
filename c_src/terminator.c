@@ -35,7 +35,8 @@ static inline int push_nif_atom(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv*
 			if(enif_get_atom(env, message, atom, atom_length, ERL_NIF_LATIN1))
 			{
 				luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
-				lua_pushlstring(lua, (const char*)atom, atom_length);
+				// lua length doesn't include the \0
+				lua_pushlstring(lua, (const char*)atom, atom_length - 1); 
 				result = 1;
 			}
 			enif_free(atom);
