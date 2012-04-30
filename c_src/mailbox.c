@@ -25,11 +25,11 @@ static int next_message(lua_State* lua)
 	message_queue_ptr messages = get_messages(lua);
 
 	// stack: -
-	ErlNifEnv* env;
 	ERL_NIF_TERM message;
-	int had_message  = message_queue_pop( messages, &message, &env);
+	int had_message  = message_queue_pop( messages, &message);
 	if(had_message)
 	{
+		ErlNifEnv* env = message_queue_process_getenv( messages );
 		terminator_tolua(lua, message, env);
 	}
 	else

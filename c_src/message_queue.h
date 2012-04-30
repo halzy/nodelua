@@ -10,8 +10,9 @@ void destroy_message_queue(message_queue_ptr messages);
 
 void message_queue_process_begin(message_queue_ptr messages);
 void message_queue_process_end(message_queue_ptr messages);
+ErlNifEnv* message_queue_process_getenv(message_queue_ptr messages);
 
 int message_queue_push(message_queue_ptr messages, ERL_NIF_TERM message);
-int message_queue_pop( message_queue_ptr messages, ERL_NIF_TERM *message, ErlNifEnv** env);
+int message_queue_pop( message_queue_ptr messages, ERL_NIF_TERM *message);
 
 #endif

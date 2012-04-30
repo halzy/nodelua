@@ -114,20 +114,24 @@ int message_queue_push(message_queue_ptr messages, ERL_NIF_TERM message)
   return result;
 }
 
-int message_queue_pop( message_queue_ptr messages, ERL_NIF_TERM *message, ErlNifEnv** env)
+
+
+ErlNifEnv* message_queue_process_getenv(message_queue_ptr messages)
 {
+  return messages->env_processing;  
+}
+
+
+
+int message_queue_pop( message_queue_ptr messages, ERL_NIF_TERM *message)
+{
+  // no locking on swap_lock needed since pop-ing is 
+  // in the thread that does the swap
   ERL_NIF_TERM *message_copy;
-  enif_rwlock_rlock(messages->swap_lock);
   int had_item = queue_pop_nowait(messages->processing, (void**)&message_copy);
-  *env = messages->env_processing;
-  enif_rwlock_runlock(messages->swap_lock);
   if(had_item)
   {
     *message = destroy_message(message_copy);
-  }
-  else
-  {
-    *env = NULL;
   }
 
   return had_item;
@@ -138,7 +142,6 @@ int message_queue_pop( message_queue_ptr messages, ERL_NIF_TERM *message, ErlNif
 void message_queue_process_end(message_queue_ptr messages)
 {
   ERL_NIF_TERM test;
-  ErlNifEnv* env;
 
   // using a read lock here so that we can also call _pop.
   // this is safe because of how it is used, we are modifying
@@ -146,7 +149,7 @@ void message_queue_process_end(message_queue_ptr messages)
   // no readers since this same thread would have run the
   // lua instance which pop'd the messages. 
   enif_rwlock_rlock(messages->swap_lock);
-  int had_item = message_queue_pop(messages, &test, &env);
+  int had_item = message_queue_pop(messages, &test);
   if(!had_item)
   {
     enif_clear_env(messages->env_processing);
