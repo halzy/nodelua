@@ -44,10 +44,33 @@ static int next_message(lua_State* lua)
 
 static int send_message(lua_State* lua)
 {
-	// stack: -
+	// stack: - pid, message
 	message_queue_ptr messages = get_messages(lua);
 
 	// who do we send the message to?
+	ErlNifEnv* env = message_queue_process_getenv( messages );
+
+	// validate some args
+	terminator_lua_checkpid(lua, 1);
+	luaL_checkany(lua, 2);
+
+	ERL_NIF_TERM message;
+	if(terminator_toerl(lua, &message, env))
+	{
+		ERL_NIF_TERM pid_term;
+		if(terminator_toerl(lua, &pid_term, env))
+		{
+			ErlNifPid pid;
+			if(enif_get_local_pid(env, pid_term, &pid))
+			{
+				if(enif_send(env, &pid, env, message))
+				{
+					printf("sent message\n");
+				}
+			}
+		}
+	}
+
 
 	return 0;
 }

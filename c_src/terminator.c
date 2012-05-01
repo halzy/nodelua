@@ -6,7 +6,7 @@
 
 #include <string.h>
 
-#define TYPE_PID "nodelua.terminator.pid"
+#define TYPE_PID "mailbox.id"
 #define TYPE_REF "nodelua.terminator.ref"
 
 static const char* types[] = 
@@ -19,7 +19,6 @@ static const char* types[] =
 #define ERROR_STACK_MESSAGE "Could not grow stack large enough to read message."
 
 static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env);
-
 
 static inline int push_nif_atom(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 {
@@ -115,7 +114,11 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 			const ERL_NIF_TERM* tuple_terms;
 			if(enif_get_tuple(env, terms[tuple_index], &tuple_arity, &tuple_terms))
 			{
-				if(tuple_arity == 2 && enif_is_atom(env, tuple_terms[0]))
+				if(tuple_arity == 2 && 
+						(enif_is_atom(env, tuple_terms[0]) || 
+						enif_is_binary(env, tuple_terms[0]) || 
+						enif_is_list(env, tuple_terms[0])) 
+					)
 				{
 					++map_count;
 					continue;
@@ -126,15 +129,19 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_createtable(lua, array_count, map_count);
-		int table_index = 0;
-		for(tuple_index = 0; tuple_index < arity; ++tuple_index)
+		int table_index;
+		for(tuple_index = 1; tuple_index <= arity; ++tuple_index)
 		{
-			int tuple_arity = 1;
+			int tuple_arity = 0;
 			const ERL_NIF_TERM* tuple_terms;
 
 			if(enif_get_tuple(env, terms[tuple_index], &tuple_arity, &tuple_terms))
 			{
-				if(tuple_arity == 2 && enif_is_atom(env, tuple_terms[0]))
+				if(tuple_arity == 2 && 
+						(enif_is_atom(env, tuple_terms[0]) || 
+						enif_is_binary(env, tuple_terms[0]) || 
+						enif_is_list(env, tuple_terms[0])) 
+					)
 				{
 					push_nif_term(lua, tuple_terms[0], env);
 					push_nif_term(lua, tuple_terms[1], env);
@@ -185,7 +192,11 @@ static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
 			const ERL_NIF_TERM* tuple_terms;
 			if(enif_get_tuple(env, head, &tuple_arity, &tuple_terms))
 			{
-				if(tuple_arity == 2 && enif_is_atom(env, tuple_terms[0]))
+				if(tuple_arity == 2 && 
+						(enif_is_atom(env, tuple_terms[0]) || 
+						enif_is_binary(env, tuple_terms[0]) || 
+						enif_is_list(env, tuple_terms[0])) 
+					)				
 				{
 					++map_count;
 					continue;
@@ -198,16 +209,19 @@ static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
 		lua_createtable(lua, array_count, map_count);
 
 		tail = list;
-		int index = 0;
+		int index = 1;
 		while(enif_get_list_cell(env, tail, &head, &tail))
 		{
-			int tuple_arity = 1;
+			int tuple_arity = 0;
 			const ERL_NIF_TERM* tuple_terms;
 
 			if(enif_get_tuple(env, head, &tuple_arity, &tuple_terms))
 			{
-				if(tuple_arity == 2 && enif_is_atom(env, tuple_terms[0]))
-				{
+				if(tuple_arity == 2 && 
+						(enif_is_atom(env, tuple_terms[0]) || 
+						enif_is_binary(env, tuple_terms[0]) || 
+						enif_is_list(env, tuple_terms[0])) 
+					)				{
 					push_nif_term(lua, tuple_terms[0], env);
 					push_nif_term(lua, tuple_terms[1], env);
 					lua_rawset(lua, -3);
@@ -269,25 +283,174 @@ static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 	{
 		printf("#exception\n");
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
-		lua_pushliteral(lua, "exception transcoding not supported");
+		lua_pushliteral(lua, "sending an exception is not supported");
 	}
 	else if(enif_is_fun(env, message))
 	{
 		printf("#fun\n");
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
-		lua_pushliteral(lua, "erlang function reference passing is not supported");
+		lua_pushliteral(lua, "sending a function reference is not supported");
 	}
 	else if(enif_is_port(env, message))
 	{
 		printf("#port\n");
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
-		lua_pushliteral(lua, "erlang port transcoding not supported");
+		lua_pushliteral(lua, "sending a port is not supported");
 	}
 }
 
 void terminator_tolua(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 {
 	push_nif_term(lua, message, env);
+}
+
+
+// takes the first term off of the lua stack and return it as an
+// erlang term in the state 'env'.
+static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv* env)
+{
+	const int top = lua_gettop(lua);
+
+	switch(lua_type(lua, top))
+	{
+		case LUA_TNIL:
+		{
+			*result = enif_make_atom(env, "nil");
+			return 1;
+			break;
+		}
+		case LUA_TNUMBER:
+		{
+			const lua_Number number = luaL_checknumber(lua, top);
+			*result = enif_make_double(env, (double)number);
+			return 1;
+			break;
+		}
+		case LUA_TBOOLEAN:
+		{
+			const int truefalse = lua_toboolean(lua, top);
+			*result = truefalse ? enif_make_atom(env, "true") : enif_make_atom(env, "false");
+			return 1;
+			break;
+		}
+		case LUA_TSTRING:
+		{
+			// get the lua string
+			size_t string_len;
+			const char * lua_string = lua_tolstring (lua, top, &string_len);
+
+			// make space in erlang for it
+			ErlNifBinary binary;
+			if(enif_alloc_binary(string_len, &binary))
+			{
+				// clean it
+				memset(binary.data, 0, binary.size);
+
+				// copy it over
+				memcpy(binary.data, lua_string, string_len);
+
+				*result = enif_make_binary(env, &binary);
+			}
+			else
+			{
+				luaL_error (lua, "could not convert lua string");
+			}
+
+			return 1;
+			break;
+		}
+		case LUA_TTABLE:
+		{
+			size_t table_size = 0;
+
+			// table is at the top of the stack
+			lua_pushnil(lua);  // nil as the first key
+			while (lua_next(lua, top) != 0) {
+				++table_size;
+				lua_pop(lua, 1);
+			}
+
+			// make sure we can grow the stack
+			luaL_checkstack(lua, 2, ERROR_STACK_MESSAGE);
+
+			ERL_NIF_TERM *new_table = (ERL_NIF_TERM*) enif_alloc(table_size * sizeof(ERL_NIF_TERM));
+			ERL_NIF_TERM *next_cell = new_table;
+
+			// table is at the top of the stack
+			lua_pushnil(lua);  // nil as the first key
+			while (lua_next(lua, top) != 0) {
+				// uses 'key' (at index -2) and 'value' (at index -1)
+				ERL_NIF_TERM tuple_value;
+				terminator_toerl_core(lua, &tuple_value, env);
+
+				// remove 'value', keeps 'key' for next iteration
+				lua_pop(lua, 1);
+				ERL_NIF_TERM tuple_key;
+				terminator_toerl_core(lua, &tuple_key, env);
+
+				*next_cell = enif_make_tuple2(env, tuple_key, tuple_value);
+				next_cell++;
+			}
+
+			if(NULL != new_table)
+			{
+				*result = enif_make_list_from_array(env, new_table, table_size);
+				enif_free(new_table);
+			}
+
+			return 1;
+			break;
+		}
+		case LUA_TUSERDATA:
+		{
+			// TODO @@@ checkpid will barf if it is a ref
+			void* userdata = terminator_lua_checkpid(lua, top);
+			if(NULL != userdata)
+			{
+				*result = enif_make_pid(env, (const ErlNifPid*) userdata);
+				return 1;
+			}
+
+			userdata = luaL_checkudata(lua, top, TYPE_REF);
+			if(NULL != userdata)
+			{			
+				return 1;
+			}
+
+			break;
+		}
+		case LUA_TLIGHTUSERDATA:
+		{
+			*result = enif_make_atom(env, "lua_lightuserdata_notsupported");
+			return 1;
+			break;
+		}
+		case LUA_TTHREAD:
+		{
+			*result = enif_make_atom(env, "lua_thread_notsupported");
+			return 1;
+			break;
+		}
+		case LUA_TFUNCTION:
+		{
+			*result = enif_make_atom(env, "lua_function_notsupported");
+			return 1;
+			break;
+		}
+	}
+	return 0;
+}
+
+int terminator_toerl(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv* env)
+{
+	int retval = terminator_toerl_core(lua, result, env);
+	lua_pop(lua, 1);
+	return retval;
+}
+
+void* terminator_lua_checkpid(lua_State* lua, int index)
+{
+	return luaL_checkudata(lua, index, TYPE_PID);
 }
 
 void terminator_create_types(lua_State* lua)

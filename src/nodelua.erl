@@ -42,27 +42,34 @@ send_core(_Ref, _Message) ->
 %% ===================================================================
 -ifdef(TEST).
 
-basic_test() ->
+basic_tes() ->
     {ok, Script} = file:read_file("../scripts/basic_test.lua"),
     {ok, Ref} = run(Script),
     ?assertEqual(ok, send(Ref, ok)).
 
-message_send_test() ->
+bounce_message(Ref, Message, Expected) ->
+    send(Ref, [{pid, self()}, {message, Message}]),
+    receive 
+        Response -> 
+            ?assertEqual(Expected, Response)
+    end.
+
+translation_test() ->
     {ok, Script} = file:read_file("../scripts/incoming_message.lua"),
     {ok, Ref} = run(Script),
-    ?assertEqual(ok, send(Ref, ok)),
-    ?assertEqual(ok, send(Ref, <<"mkay">>)),
-    ?assertEqual(ok, send(Ref, [])),
-    ?assertEqual(ok, send(Ref, [ok, {something, foobar}, {{type, point}, {x, 1}, {y, 2}}])),
-    ?assertEqual(ok, send(Ref, 2)),
-    ?assertEqual(ok, send(Ref, -2)),
-    ?assertEqual(ok, send(Ref, -0.2)),
-    ?assertEqual(ok, send(Ref, 0.2)),
-    ?assertEqual(ok, send(Ref, fun(A) -> A end)),
-    ?assertEqual(ok, send(Ref, erlang:make_ref())),
-    ?assertEqual(ok, send(Ref, self())),
-    ?assertEqual(ok, send(Ref, Ref)),
-    ?assertEqual(ok, send(Ref, {ok, tuple, {something, other}, bla})),
-    receive after 1000 -> true end.
+    bounce_message(Ref, ok, <<"ok">>),
+    bounce_message(Ref, <<"mkay">>, <<"mkay">>),
+    bounce_message(Ref, [], []),
+    bounce_message(Ref, 2, 2.0),
+    bounce_message(Ref, -2, -2.0),
+    bounce_message(Ref, -0.2, -0.2),
+    bounce_message(Ref, 0.2, 0.2),
+    bounce_message(Ref, fun(A) -> A end, <<"sending a function reference is not supported">>),
+    %MakeRefValue = erlang:make_ref(),
+    %bounce_message(Ref, MakeRefValue, MakeRefValue),
+    bounce_message(Ref, Ref, Ref),
+    bounce_message(Ref, [ok], [{1.0, <<"ok">>}]),
+    bounce_message(Ref, "test", <<"test">>).
+
 
 -endif.
