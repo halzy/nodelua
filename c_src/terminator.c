@@ -20,6 +20,62 @@ static const char* types[] =
 
 static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env);
 
+static int push_table_iskvp(ErlNifEnv* env, ERL_NIF_TERM tuple)
+{
+	int result = 0;
+	int tuple_arity = 0;
+	const ERL_NIF_TERM* tuple_terms;
+	if(enif_get_tuple(env, tuple, &tuple_arity, &tuple_terms))
+	{
+		result = (tuple_arity == 2);
+	}
+	return result;
+}
+
+
+// pushes the items in the array into the table on the top of the stack
+static void push_table_append(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM array_items[], int array_count)
+{
+	int lua_index = 0;
+	int index = 0;
+	for(index = 0; index < array_count; ++index)
+	{
+		int index_open = 0;
+		do
+		{
+			++lua_index;
+			lua_rawgeti(lua, -1, lua_index);
+			index_open = lua_isnil(lua, -1);
+			lua_pop(lua, 1);
+		} while(!index_open);
+
+		push_nif_term(lua, array_items[index], env);
+		lua_rawseti(lua, -2, lua_index);
+	}
+}
+
+
+static int push_table_set(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM tuple)
+{
+	int result = 0;
+	int tuple_arity = 0;
+	const ERL_NIF_TERM* tuple_terms;
+
+	if(enif_get_tuple(env, tuple, &tuple_arity, &tuple_terms))
+	{
+		if(tuple_arity == 2)	
+		{
+			push_nif_term(lua, tuple_terms[0], env);
+			push_nif_term(lua, tuple_terms[1], env);
+			lua_rawset(lua, -3);
+			result = 1;
+		}
+	}
+
+	return result;
+}
+
+
 static inline int push_nif_atom(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 {
 	int result = 0;
@@ -109,6 +165,7 @@ static inline int push_nif_number(lua_State* lua, ERL_NIF_TERM message, ErlNifEn
 
 static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 {
+	// TODO @@@ this function and push_nif_tuple are very very similar, refactor
 	int map_count = 0;
 	int array_count = 0;
 
@@ -120,45 +177,31 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 		int tuple_index = 0;
 		for(; tuple_index < arity; ++tuple_index)
 		{
-			int tuple_arity = 0;
-			const ERL_NIF_TERM* tuple_terms;
-			if(enif_get_tuple(env, terms[tuple_index], &tuple_arity, &tuple_terms))
+			if(push_table_iskvp(env, terms[tuple_index]))
 			{
-				if(tuple_arity == 2 && 
-						(enif_is_atom(env, tuple_terms[0]) || 
-						enif_is_binary(env, tuple_terms[0])) 
-					)
-				{
-					++map_count;
-					continue;
-				}
+				++map_count;
 			}
-			++array_count;
+			else
+			{
+				++array_count;
+			}
 		}
+
+		ERL_NIF_TERM array_items[array_count];
 
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_createtable(lua, array_count, map_count);
-		int table_index = 1;
+		int index = 0;
+
 		for(tuple_index = 0; tuple_index < arity; ++tuple_index)
 		{
-			int tuple_arity = 0;
-			const ERL_NIF_TERM* tuple_terms;
-			if(enif_get_tuple(env, terms[tuple_index], &tuple_arity, &tuple_terms))
+			if(!push_table_set(lua, env, terms[tuple_index]))
 			{
-				if(tuple_arity == 2 && 
-						(enif_is_atom(env, tuple_terms[0]) || 
-						enif_is_binary(env, tuple_terms[0])) 
-					)
-				{
-					push_nif_term(lua, tuple_terms[0], env);
-					push_nif_term(lua, tuple_terms[1], env);
-					lua_rawset(lua, -3);
-					continue;
-				}
+				array_items[index++] = terms[tuple_index];
 			}
-			push_nif_term(lua, terms[tuple_index], env);
-			lua_rawseti(lua, -2, table_index++);
 		}
+
+		push_table_append(lua, env, array_items, array_count);
 	}
 }
 
@@ -194,47 +237,32 @@ static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
 		ERL_NIF_TERM tail = list;
 		while(enif_get_list_cell(env, tail, &head, &tail))
 		{
-			int tuple_arity = 0;
-			const ERL_NIF_TERM* tuple_terms;
-			if(enif_get_tuple(env, head, &tuple_arity, &tuple_terms))
+			if(push_table_iskvp(env, head))
 			{
-				if(tuple_arity == 2 && 
-						(enif_is_atom(env, tuple_terms[0]) || 
-						enif_is_binary(env, tuple_terms[0])) 
-					)				
-				{
-					++map_count;
-					continue;
-				}
+				++map_count;
 			}
-			++array_count;
+			else
+			{
+				++array_count;
+			}
 		}
+		
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_createtable(lua, array_count, map_count);
 
+		ERL_NIF_TERM array_items[array_count];
+
 		tail = list;
-		int index = 1;
+		int index = 0;
 		while(enif_get_list_cell(env, tail, &head, &tail))
 		{
-			int tuple_arity = 0;
-			const ERL_NIF_TERM* tuple_terms;
-
-			if(enif_get_tuple(env, head, &tuple_arity, &tuple_terms))
+			if(!push_table_set(lua, env, head))
 			{
-				if(tuple_arity == 2 && 
-						(enif_is_atom(env, tuple_terms[0]) || 
-						enif_is_binary(env, tuple_terms[0])) 
-					)				
-				{
-					push_nif_term(lua, tuple_terms[0], env);
-					push_nif_term(lua, tuple_terms[1], env);
-					lua_rawset(lua, -3);
-					continue;
-				}
+				array_items[index++] = head;
 			}
-			push_nif_term(lua, head, env);
-			lua_rawseti(lua, -2, index++);
 		}
+
+		push_table_append(lua, env, array_items, array_count);
 	}
 }
 
