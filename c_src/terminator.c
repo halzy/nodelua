@@ -126,8 +126,7 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 			{
 				if(tuple_arity == 2 && 
 						(enif_is_atom(env, tuple_terms[0]) || 
-						enif_is_binary(env, tuple_terms[0]) || 
-						enif_is_list(env, tuple_terms[0])) 
+						enif_is_binary(env, tuple_terms[0])) 
 					)
 				{
 					++map_count;
@@ -139,8 +138,8 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_createtable(lua, array_count, map_count);
-		int table_index;
-		for(tuple_index = 1; tuple_index <= arity; ++tuple_index)
+		int table_index = 1;
+		for(tuple_index = 0; tuple_index < arity; ++tuple_index)
 		{
 			int tuple_arity = 0;
 			const ERL_NIF_TERM* tuple_terms;
@@ -204,8 +203,7 @@ static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
 			{
 				if(tuple_arity == 2 && 
 						(enif_is_atom(env, tuple_terms[0]) || 
-						enif_is_binary(env, tuple_terms[0]) || 
-						enif_is_list(env, tuple_terms[0])) 
+						enif_is_binary(env, tuple_terms[0])) 
 					)				
 				{
 					++map_count;
@@ -229,16 +227,15 @@ static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
 			{
 				if(tuple_arity == 2 && 
 						(enif_is_atom(env, tuple_terms[0]) || 
-						enif_is_binary(env, tuple_terms[0]) || 
-						enif_is_list(env, tuple_terms[0])) 
-					)				{
+						enif_is_binary(env, tuple_terms[0])) 
+					)				
+				{
 					push_nif_term(lua, tuple_terms[0], env);
 					push_nif_term(lua, tuple_terms[1], env);
 					lua_rawset(lua, -3);
 					continue;
 				}
 			}
-
 			push_nif_term(lua, head, env);
 			lua_rawseti(lua, -2, index++);
 		}
