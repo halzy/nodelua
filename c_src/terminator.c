@@ -413,20 +413,38 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 		}
 		case LUA_TUSERDATA:
 		{
-			// TODO @@@ checkpid will barf if it is a ref
-			void* userdata = terminator_lua_checkpid(lua, top);
-			if(NULL != userdata)
+			// add metatable to stack
+			if(lua_getmetatable (lua, top))
 			{
-				*result = enif_make_pid(env, (const ErlNifPid*) userdata);
-				return 1;
+				// put the pid metatable onto the stack
+				luaL_newmetatable(lua, TYPE_PID);
+
+				// compare the two metatables
+				if(lua_equal(lua, -1, -2))
+				{
+					const ErlNifPid* userdata = (const ErlNifPid*) lua_touserdata(lua, top);
+					*result = enif_make_pid(env, userdata);
+					lua_pop(lua, 2);
+					return 1;
+				}
+				// pop the pid metatable
+				lua_pop(lua, 1);				
+
+				// push the ref metatable
+				luaL_newmetatable(lua, TYPE_REF);
+				if(lua_equal(lua, -1, -2))
+				{
+					ERL_NIF_TERM* nif_ptr = (ERL_NIF_TERM*) lua_touserdata(lua, top);
+					*result = (*nif_ptr);
+					lua_pop(lua, 2);
+					return 1;
+				}
+				// pop the ref metatable and the userdatas metatable
+				lua_pop(lua, 2);
 			}
 
-			userdata = luaL_checkudata(lua, top, TYPE_REF);
-			if(NULL != userdata)
-			{			
-				return 1;
-			}
-
+			*result = enif_make_atom(env, "unknown_lua_userdata");
+			return 1;
 			break;
 		}
 		case LUA_TLIGHTUSERDATA:
