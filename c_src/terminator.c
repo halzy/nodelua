@@ -23,24 +23,34 @@ static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env);
 static inline int push_nif_atom(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 {
 	int result = 0;
-	unsigned int atom_length;
-	if(enif_get_atom_length(env, message, &atom_length, ERL_NIF_LATIN1))
-	{
-		++atom_length; // add a space for terminating null
-		char* atom = (char*) enif_alloc(atom_length);
-		memset(atom, 0, atom_length);
-		if(NULL != atom)
-		{
-			if(enif_get_atom(env, message, atom, atom_length, ERL_NIF_LATIN1))
-			{
-				luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
-				// lua length doesn't include the \0
-				lua_pushlstring(lua, (const char*)atom, atom_length - 1); 
-				result = 1;
-			}
-			enif_free(atom);
-		}
-	}
+
+	// max length for atoms is 255
+    char atom[256] = { 0 }; 
+
+    const int atom_length = enif_get_atom(env, message, atom, 256, ERL_NIF_LATIN1);
+    if(0 < atom_length)
+    {
+		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
+	    if(strcmp(atom, "true") == 0)
+	    {
+	    	lua_pushboolean(lua, 1);
+	    }	
+	    else if(strcmp(atom, "false") == 0)
+	    {
+	    	lua_pushboolean(lua, 0);
+	    }
+	    else if(strcmp(atom, "nil") == 0)
+	    {
+	    	lua_pushnil(lua);
+	    }
+	    else
+	    {
+			// lua length doesn't include the \0
+			lua_pushlstring(lua, (const char*)atom, atom_length - 1); 
+	    }
+		result = 1;
+    }
+
 	return result;
 }
 
