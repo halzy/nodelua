@@ -42,7 +42,7 @@ send_core(_Ref, _Message) ->
 %% ===================================================================
 -ifdef(TEST).
 
-basic_tes() ->
+basic_test() ->
     {ok, Script} = file:read_file("../scripts/basic_test.lua"),
     {ok, Ref} = run(Script),
     ?assertEqual(ok, send(Ref, ok)).
@@ -72,7 +72,6 @@ translation_test() ->
     bounce_message(Ref, true, true),
     bounce_message(Ref, false, false),
     bounce_message(Ref, nil, nil),
-    bounce_message(Ref, "test", <<"test">>).
-
+    bounce_message(Ref, "test", [{1.0,116.0}, {2.0,101.0}, {3.0,115.0}, {4.0,116.0}]).
 
 -endif.

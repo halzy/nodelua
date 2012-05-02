@@ -63,10 +63,7 @@ static int send_message(lua_State* lua)
 			ErlNifPid pid;
 			if(enif_get_local_pid(env, pid_term, &pid))
 			{
-				if(enif_send(env, &pid, env, message))
-				{
-					printf("sent message\n");
-				}
+				enif_send(env, &pid, env, message);
 			}
 		}
 	}

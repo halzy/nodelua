@@ -291,19 +291,19 @@ static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 	}
 	else if(enif_is_exception(env, message))
 	{
-		printf("#exception\n");
+		//printf("#exception\n");
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_pushliteral(lua, "sending an exception is not supported");
 	}
 	else if(enif_is_fun(env, message))
 	{
-		printf("#fun\n");
+		//printf("#fun\n");
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_pushliteral(lua, "sending a function reference is not supported");
 	}
 	else if(enif_is_port(env, message))
 	{
-		printf("#port\n");
+		//printf("#port\n");
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_pushliteral(lua, "sending a port is not supported");
 	}

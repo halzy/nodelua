@@ -15,11 +15,11 @@ end
 
 function main()
 	while true do
-		print("incoming")
+		-- print("incoming")
 		while true do
 			local message = mailbox.next()
 			if message == nil then break end
-			print(dump(message))
+			-- print(dump(message))
 			if 'table' == type(message) then
 				local pid = message["pid"]
 				local msg = message.message
