@@ -20,15 +20,29 @@ static const char* types[] =
 
 static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env);
 
-static int push_table_iskvp(ErlNifEnv* env, ERL_NIF_TERM tuple)
+// checks to see if the tuple is something we would put as a KV pair in a lua table
+// puts the key(0) and value(1) in the array
+static int push_table_iskvp(ErlNifEnv* env, ERL_NIF_TERM tuple, const ERL_NIF_TERM** array)
 {
 	int result = 0;
 	int tuple_arity = 0;
 	const ERL_NIF_TERM* tuple_terms;
 	if(enif_get_tuple(env, tuple, &tuple_arity, &tuple_terms))
 	{
-		result = (tuple_arity == 2);
+		if(tuple_arity == 2)
+		{
+			result = 1;
+			if(NULL != array)
+			{
+				*array = tuple_terms;
+			}
+		}
+	} 
+	else if(NULL != array)
+	{
+		*array = NULL;
 	}
+
 	return result;
 }
 
@@ -58,18 +72,14 @@ static void push_table_append(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM array
 static int push_table_set(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM tuple)
 {
 	int result = 0;
-	int tuple_arity = 0;
 	const ERL_NIF_TERM* tuple_terms;
 
-	if(enif_get_tuple(env, tuple, &tuple_arity, &tuple_terms))
+	if(push_table_iskvp(env, tuple, &tuple_terms))
 	{
-		if(tuple_arity == 2)	
-		{
-			push_nif_term(lua, tuple_terms[0], env);
-			push_nif_term(lua, tuple_terms[1], env);
-			lua_rawset(lua, -3);
-			result = 1;
-		}
+		push_nif_term(lua, tuple_terms[0], env);
+		push_nif_term(lua, tuple_terms[1], env);
+		lua_rawset(lua, -3);
+		result = 1;
 	}
 
 	return result;
@@ -177,7 +187,7 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 		int tuple_index = 0;
 		for(; tuple_index < arity; ++tuple_index)
 		{
-			if(push_table_iskvp(env, terms[tuple_index]))
+			if(push_table_iskvp(env, terms[tuple_index], NULL))
 			{
 				++map_count;
 			}
@@ -237,7 +247,7 @@ static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
 		ERL_NIF_TERM tail = list;
 		while(enif_get_list_cell(env, tail, &head, &tail))
 		{
-			if(push_table_iskvp(env, head))
+			if(push_table_iskvp(env, head, NULL))
 			{
 				++map_count;
 			}
@@ -246,7 +256,7 @@ static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
 				++array_count;
 			}
 		}
-		
+
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_createtable(lua, array_count, map_count);
 
