@@ -143,13 +143,11 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 		{
 			int tuple_arity = 0;
 			const ERL_NIF_TERM* tuple_terms;
-
 			if(enif_get_tuple(env, terms[tuple_index], &tuple_arity, &tuple_terms))
 			{
 				if(tuple_arity == 2 && 
 						(enif_is_atom(env, tuple_terms[0]) || 
-						enif_is_binary(env, tuple_terms[0]) || 
-						enif_is_list(env, tuple_terms[0])) 
+						enif_is_binary(env, tuple_terms[0])) 
 					)
 				{
 					push_nif_term(lua, tuple_terms[0], env);
@@ -158,7 +156,6 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 					continue;
 				}
 			}
-
 			push_nif_term(lua, terms[tuple_index], env);
 			lua_rawseti(lua, -2, table_index++);
 		}
@@ -212,7 +209,6 @@ static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
 			}
 			++array_count;
 		}
-
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_createtable(lua, array_count, map_count);
 
@@ -275,7 +271,7 @@ static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 		push_nif_number(lua, message, env);
 	}
 	else if(enif_is_tuple(env, message))
-	{
+	{	
 		push_nif_tuple(lua, message, env);
 	}
 	else if(enif_is_pid(env, message))
