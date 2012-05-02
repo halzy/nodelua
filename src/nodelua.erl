@@ -72,6 +72,16 @@ translation_test() ->
     bounce_message(Ref, true, true),
     bounce_message(Ref, false, false),
     bounce_message(Ref, nil, nil),
+    bounce_message(Ref, [{1, <<"ok">>}], [{1.0, <<"ok">>}]),
+    bounce_message(Ref, [{3, 3}, {2, 2}, one, four, five], [{1.0,<<"one">>}, {2.0,2.0}, {3.0,3.0}, {5.0,<<"five">>}, {4.0,<<"four">>}]),
+    bounce_message(Ref, {{3, 3}, {2, 2}, one, four, five}, [{1.0,<<"one">>}, {2.0,2.0}, {3.0,3.0}, {5.0,<<"five">>}, {4.0,<<"four">>}]),
+    bounce_message(Ref, [first, {1, <<"ok">>}], [{1.0,<<"ok">>},{2.0,<<"first">>}]),
+    bounce_message(Ref, {}, []),
+    bounce_message(Ref, [{ok, ok}], [{<<"ok">>,<<"ok">>}]),
+    % identical keys clobber each other
+    bounce_message(Ref, [{ok, ok}, {ok, notok}], [{<<"ok">>,<<"notok">>}]),
+    bounce_message(Ref, [{one, ok}, {two, ok}], [{<<"one">>,<<"ok">>},{<<"two">>,<<"ok">>}]),
+    % strings are lists and get treated as such
     bounce_message(Ref, "test", [{1.0,116.0}, {2.0,101.0}, {3.0,115.0}, {4.0,116.0}]).
 
 -endif.
