@@ -65,10 +65,13 @@ translation_test() ->
     bounce_message(Ref, -0.2, -0.2),
     bounce_message(Ref, 0.2, 0.2),
     bounce_message(Ref, fun(A) -> A end, <<"sending a function reference is not supported">>),
-    %MakeRefValue = erlang:make_ref(),
-    %bounce_message(Ref, MakeRefValue, MakeRefValue),
+    MakeRefValue = erlang:make_ref(), % this may not work if the erlang environment is cleared
+    bounce_message(Ref, MakeRefValue, MakeRefValue),
     bounce_message(Ref, Ref, Ref),
     bounce_message(Ref, [ok], [{1.0, <<"ok">>}]),
+    bounce_message(Ref, true, true),
+    bounce_message(Ref, false, false),
+    bounce_message(Ref, nil, nil),
     bounce_message(Ref, "test", <<"test">>).
 
 
