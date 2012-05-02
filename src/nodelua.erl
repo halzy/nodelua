@@ -78,8 +78,8 @@ translation_test() ->
     bounce_message(Ref, [first, {1, <<"ok">>}], [{1.0,<<"ok">>},{2.0,<<"first">>}]),
     bounce_message(Ref, {}, []),
     bounce_message(Ref, [{ok, ok}], [{<<"ok">>,<<"ok">>}]),
-    % identical keys clobber each other
-    bounce_message(Ref, [{ok, ok}, {ok, notok}], [{<<"ok">>,<<"notok">>}]),
+    % instead of clobbering KvP with matching K, append them as a list, not awesome, but doesn't lose data
+    bounce_message(Ref, [{ok, ok}, {ok, notok}], [{<<"ok">>,<<"ok">>}, {1.0,[{1.0,<<"ok">>},{2.0,<<"notok">>}]}]),
     bounce_message(Ref, [{one, ok}, {two, ok}], [{<<"one">>,<<"ok">>},{<<"two">>,<<"ok">>}]),
     % strings are lists and get treated as such
     bounce_message(Ref, "test", [{1.0,116.0}, {2.0,101.0}, {3.0,115.0}, {4.0,116.0}]).

@@ -68,7 +68,7 @@ static void push_table_append(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM array
 	}
 }
 
-
+// it is expected that a table is on top of the lua stack
 static int push_table_set(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM tuple)
 {
 	int result = 0;
@@ -76,10 +76,42 @@ static int push_table_set(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM tuple)
 
 	if(push_table_iskvp(env, tuple, &tuple_terms))
 	{
+		// stack: table
 		push_nif_term(lua, tuple_terms[0], env);
-		push_nif_term(lua, tuple_terms[1], env);
-		lua_rawset(lua, -3);
-		result = 1;
+		// stack: table, key
+
+		int insert = 0;
+		// check to see if the term is primitive enough and 
+		// if it already exists as a KvP then retun failure
+		// so that it can get appended to the list
+		int type = lua_type(lua, -1);
+		if(type == LUA_TNUMBER || type == LUA_TBOOLEAN || type == LUA_TSTRING 
+			|| type == LUA_TUSERDATA || type == LUA_TLIGHTUSERDATA)
+		{
+			lua_pushvalue (lua, -1);
+			// stack: table, key, key
+
+			lua_rawget(lua, -3);
+			// stack: table, key, value
+
+			insert = (1 == lua_isnil(lua, -1));
+			lua_pop(lua, 1);
+			// stack: table, key
+		}
+
+
+		if(insert)
+		{
+			push_nif_term(lua, tuple_terms[1], env);
+			// stack: table, key, value
+			lua_rawset(lua, -3);
+			// stack: table
+			result = 1;
+		}
+		else
+		{
+			lua_pop(lua, 1);
+		}
 	}
 
 	return result;
@@ -197,7 +229,7 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 			}
 		}
 
-		ERL_NIF_TERM array_items[array_count];
+		ERL_NIF_TERM array_items[array_count+map_count];
 
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_createtable(lua, array_count, map_count);
@@ -211,7 +243,7 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 			}
 		}
 
-		push_table_append(lua, env, array_items, array_count);
+		push_table_append(lua, env, array_items, index);
 	}
 }
 
@@ -260,7 +292,7 @@ static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_createtable(lua, array_count, map_count);
 
-		ERL_NIF_TERM array_items[array_count];
+		ERL_NIF_TERM array_items[array_count + map_count];
 
 		tail = list;
 		int index = 0;
@@ -272,7 +304,7 @@ static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
 			}
 		}
 
-		push_table_append(lua, env, array_items, array_count);
+		push_table_append(lua, env, array_items, index);
 	}
 }
 
