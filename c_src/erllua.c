@@ -60,7 +60,8 @@ ERLLUA_STATE erllua_run(erllua_ptr erllua)
   // swap the message queues, make the incoming the processing one
   message_queue_process_begin(erllua->messages);  
   // lua is expected to empty the message queue
-  int result = lua_resume(erllua->coroutine, 0);
+  int result = lua_resume(erllua->coroutine, NULL, 0);
+
   // clear the environmest for the queue to let erlang GC some unused terms
   message_queue_process_end(erllua->messages);
 
@@ -143,7 +144,7 @@ erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, 
   // Load the command and try to execute it... we don't want to hold onto
   // the binary longer than this, so give it to lua and store it as lua
   // runtime script
-  int load_result = lua_load(erllua->coroutine, read_input_script, &input_script, name);
+  int load_result = lua_load(erllua->coroutine, read_input_script, &input_script, name, "bt");
   switch(load_result)
   {
     case 0:
@@ -164,9 +165,7 @@ erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, 
   }
 
   // add my libs here
-  lua_pushcfunction(erllua->coroutine, luaopen_mailbox);
-  lua_pushlightuserdata(erllua->coroutine, erllua->messages);
-  lua_call(erllua->coroutine, 1, 0);
+  register_mailbox(erllua->coroutine, erllua->messages);
 
   return erllua;
 

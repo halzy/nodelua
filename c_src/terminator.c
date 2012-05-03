@@ -483,7 +483,7 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 				luaL_newmetatable(lua, TYPE_PID);
 
 				// compare the two metatables
-				if(lua_equal(lua, -1, -2))
+				if(lua_compare(lua, -1, -2, LUA_OPEQ))
 				{
 					const ErlNifPid* userdata = (const ErlNifPid*) lua_touserdata(lua, top);
 					*result = enif_make_pid(env, userdata);
@@ -495,7 +495,7 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 
 				// push the ref metatable
 				luaL_newmetatable(lua, TYPE_REF);
-				if(lua_equal(lua, -1, -2))
+				if(lua_compare(lua, -1, -2, LUA_OPEQ))
 				{
 					ERL_NIF_TERM* nif_ptr = (ERL_NIF_TERM*) lua_touserdata(lua, top);
 					*result = (*nif_ptr);

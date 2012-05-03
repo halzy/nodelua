@@ -5,6 +5,6 @@
 
 #include "message_queue.h"
 
-LUALIB_API int luaopen_mailbox(lua_State *lua);
+void register_mailbox(lua_State *lua, message_queue_ptr messages);
 
 #endif

@@ -10,7 +10,8 @@
 static message_queue_ptr get_messages(lua_State* lua)
 {
 	// stack: -
-	lua_getfield(lua, LUA_ENVIRONINDEX, MESSAGES);
+	lua_pushvalue(lua, lua_upvalueindex(1));
+
 	// stack: userdata(messages)
 	message_queue_ptr messages = (message_queue_ptr) lua_touserdata(lua, -1);
 	// stack: -
@@ -72,7 +73,7 @@ static int send_message(lua_State* lua)
 	return 0;
 }
 
-static const struct luaL_Reg mailbox [] = {
+static const struct luaL_Reg mailbox_funcs [] = {
 	{"next", next_message},
 	{"send", send_message},
 	{NULL, NULL}
@@ -80,22 +81,57 @@ static const struct luaL_Reg mailbox [] = {
 
 LUALIB_API int luaopen_mailbox(lua_State *lua)
 {
-	// stack: userdata(mailbox)
+	get_messages(lua);
 	terminator_create_types(lua);
 
-	// stack: userdata(mailbox)
-	lua_newtable (lua);
-	lua_replace (lua, LUA_ENVIRONINDEX);
+	luaL_newlibtable(lua, mailbox_funcs);
 
-	// stack: userdata(mailbox)
-	luaL_register(lua, "mailbox", mailbox);
+	lua_pushvalue(lua, lua_upvalueindex(1));
 
-	// stack: userdata(mailbox), table(mailbox)
-	lua_insert(lua, 1);
+	// setfuncs will take the items between the table and the 
+	// top and make them upvalues for all functions (lua 5.2)
+	luaL_setfuncs(lua, mailbox_funcs, 1);
 
-	// stack: table(mailbox), userdata(mailbox)
-	lua_setfield (lua, LUA_ENVIRONINDEX, MESSAGES);
-
-	// stack: table(mailbox)
 	return 1;
+}
+
+
+
+LUALIB_API int do_open_mailbox(lua_State *lua)
+{
+	lua_pushvalue(lua, lua_upvalueindex(1));
+	lua_pushcclosure(lua, luaopen_mailbox, 1);
+
+	lua_pushliteral(lua, "mailbox"); /* argument to open function */
+	lua_call(lua, 1, 1);  /* open module */
+
+	// put the module into the loaded table
+	luaL_getsubtable(lua, LUA_REGISTRYINDEX, "_LOADED");
+	lua_pushvalue(lua, -2);  // make copy of module (call result)
+	lua_setfield(lua, -2, "mailbox");	// _LOADED[modname] = module
+	lua_pop(lua, 1);  					// remove _LOADED table
+
+	// put the module into the global table
+    lua_pushglobaltable(lua);
+    lua_pushvalue(lua, -2);  			// copy of 'module'
+    lua_setfield(lua, -2, "mailbox");	// _G[modname] = module
+    lua_pop(lua, 1);  					// remove _G table
+
+	return 1;
+}
+
+
+
+void register_mailbox(lua_State *lua, message_queue_ptr messages)
+{
+	int top = lua_gettop(lua);
+	lua_getfield(lua, LUA_REGISTRYINDEX, "_PRELOAD");
+	int registry = lua_gettop(lua);
+
+	lua_pushliteral(lua, "mailbox");
+	lua_pushlightuserdata(lua, messages);
+	lua_pushcclosure(lua, do_open_mailbox, 1);
+	lua_settable(lua, registry);
+
+	lua_settop(lua, top);
 }
