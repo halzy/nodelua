@@ -95,6 +95,7 @@ static int on_load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 
 static void on_unload(ErlNifEnv* env, void* priv_data)
 {
+  (void) priv_data; // unused - the state type/data is hidden in env
   state_destroy(env);
 }
 

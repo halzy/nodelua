@@ -101,6 +101,8 @@ ERLLUA_STATE erllua_run(erllua_ptr erllua)
 
 static const char *read_input_script(lua_State *env, void *user_data, size_t *size)
 {
+  (void) env; // unused
+
   struct lua_input_script *input = (struct lua_input_script *) user_data;
 
   // return NULL if we are done reading
@@ -117,6 +119,8 @@ static const char *read_input_script(lua_State *env, void *user_data, size_t *si
 // returns {ok, handle} and sets erllua_result or {error, {kind, message}} and erllua_result is NULL
 erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, const char* name)
 {
+  (void) env; // unused
+  
   erllua_ptr erllua = enif_alloc(sizeof(erllua));
   if(NULL == erllua)
     goto error_create;

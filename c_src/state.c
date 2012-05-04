@@ -164,6 +164,8 @@ error_add_script:
 
 static void resource_gc(ErlNifEnv* env, void* arg)
 {
+	(void) env; // unused
+	
 	// TODO @@@ notify the script that it will be destroyed
 	// and that it has one last chance to run before it 
 	// is shut down, perhaps send it a message?
