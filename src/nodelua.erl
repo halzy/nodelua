@@ -22,7 +22,8 @@ init() ->
                 Path ->
                     Path
             end,
-    erlang:load_nif(filename:join(PrivDir, ?MODULE), 0).
+    NumProcessors = erlang:system_info(logical_processors),
+    erlang:load_nif(filename:join(PrivDir, ?MODULE), NumProcessors).
 
 run(Script) ->
     run_core(Script).

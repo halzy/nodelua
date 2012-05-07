@@ -93,7 +93,22 @@ static int on_load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 
   (*priv_data) = state_create(env);
 
-  state_add_worker(env);
+  if(enif_is_number(env, load_info))
+  {
+    int processor_count;
+    if(enif_get_int(env, load_info, &processor_count))
+    {
+      int count;
+      for(count = 0; count < processor_count; ++count)
+      {
+        state_add_worker(env);
+      }
+    }
+    else
+    {
+      state_add_worker(env);
+    }
+  }
 
   return (NULL == *priv_data) ? 1 : 0;
 }
