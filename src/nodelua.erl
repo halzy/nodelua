@@ -29,7 +29,7 @@ run(Script) ->
     run_core(Script).
 
 send(Lua, Message) ->
-    send_core(Lua, Message).
+    send_core(Lua, [{pid, self()}, {data, Message}]).
 
 run_core(_Script) ->
     ?nif_stub.
@@ -49,7 +49,7 @@ basic_test() ->
     ?assertEqual(ok, send(Ref, ok)).
 
 bounce_message(Ref, Message, Expected) ->
-    send(Ref, [{pid, self()}, {message, Message}]),
+    send(Ref, Message),
     receive 
         Response -> 
             ?assertEqual(Expected, Response)
@@ -84,5 +84,15 @@ translation_test() ->
     bounce_message(Ref, [{one, ok}, {two, ok}], [{<<"one">>,<<"ok">>},{<<"two">>,<<"ok">>}]),
     % strings are lists and get treated as such
     bounce_message(Ref, "test", [{1.0,116.0}, {2.0,101.0}, {3.0,115.0}, {4.0,116.0}]).
+
+performance_messages(Ref) ->
+    [ send(Ref, X) || X <- lists:seq(1, 100000) ],
+    [ receive Y -> Z = erlang:trunc(Y), ?assertEqual(X, Z) end || X <- lists:seq(1, 10000) ].
+performance_test() ->
+    {ok, Script} = file:read_file("../scripts/performance.lua"),
+    {ok, Ref} = run(Script),
+    {Time, _} = timer:tc(fun performance_messages/1, [Ref]),
+    erlang:display(Ref),
+    erlang:display(Time).
 
 -endif.

@@ -22,7 +22,7 @@ function main()
 			-- print(dump(message))
 			if 'table' == type(message) then
 				local pid = message["pid"]
-				local msg = message.message
+				local msg = message.data
 				if pid then
 					mailbox.send(pid, msg)
 				end
