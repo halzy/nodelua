@@ -14,6 +14,8 @@ typedef struct work* work_ptr;
 typedef enum WORK_STATES 
 {
 	WORK_ENQUEUED,
+	WORK_PROCESSING,
+	WORK_REQUEUE,
 	WORK_WAIT
 } WORK_STATE;
 
@@ -165,7 +167,7 @@ error_add_script:
 static void resource_gc(ErlNifEnv* env, void* arg)
 {
 	(void) env; // unused
-	
+
 	// TODO @@@ notify the script that it will be destroyed
 	// and that it has one last chance to run before it 
 	// is shut down, perhaps send it a message?
@@ -237,21 +239,30 @@ void state_destroy(ErlNifEnv* env)
 }
 
 
-int enqueue_work_if(WORK_STATE work_state, state_ptr state, work_ptr work)
+// A CaS like operator for the work state, with an option to enqueue
+static int enqueue_work_cas(WORK_STATE compare_state, WORK_STATE enqueue_state, WORK_STATE else_state, state_ptr state, work_ptr work)
 {
 	int result = 0;
 
-	enif_rwlock_rlock(work->rwlock);
-	if(work_state == work->run_state)
+	enif_rwlock_rwlock(work->rwlock);
+	if(compare_state == work->run_state)
 	{
-		result = queue_push(state->work_queue, work);
-		work->run_state = WORK_ENQUEUED;
+		work->run_state = enqueue_state;
+		result = 1;
 	}
-	enif_rwlock_runlock(work->rwlock);	
+	else
+	{
+		work->run_state = else_state;
+	}
+	enif_rwlock_rwunlock(work->rwlock);	
+
+	if(result)
+	{
+		queue_push(state->work_queue, work);
+	}
 
 	return result;
 }
-
 
 
 static void* thread_main(void* state_ref)
@@ -265,7 +276,7 @@ static void* thread_main(void* state_ref)
     		break;
 
 		enif_rwlock_rwlock(work->rwlock);
-		work->run_state = WORK_WAIT;
+		work->run_state = WORK_PROCESSING;
 		enif_rwlock_rwunlock(work->rwlock);
 
 		int lua_state = erllua_run(work->erllua);
@@ -284,7 +295,11 @@ static void* thread_main(void* state_ref)
 		{
 			if(ERLLUA_YIELD == lua_state)
 			{
-				enqueue_work_if( WORK_ENQUEUED, state, work);
+				enqueue_work_cas( WORK_REQUEUE, WORK_ENQUEUED, WORK_WAIT, state, work);
+			}
+			else
+			{
+				printf("error: lua state: %d\n", lua_state);
 			}
 		}
     }
@@ -312,8 +327,8 @@ int state_send_message(ErlNifEnv* env, ERL_NIF_TERM resource_term, ERL_NIF_TERM 
 	{
 		result = erllua_send_message(resource->work->erllua, message);
 		if(result)
-		{	
-			enqueue_work_if( WORK_WAIT, state, resource->work);
+		{
+			enqueue_work_cas( WORK_WAIT, WORK_ENQUEUED, WORK_REQUEUE, state, resource->work);
 		}
 	}
 
