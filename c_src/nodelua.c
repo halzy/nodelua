@@ -40,6 +40,11 @@ static ERL_NIF_TERM nodelua_run_core(ErlNifEnv* env, int argc, const ERL_NIF_TER
 {
   ERL_NIF_TERM result;
 
+  if(1 != argc)
+  {
+    return enif_make_badarg(env);
+  }
+
   const ERL_NIF_TERM script = argv[0];
   ErlNifBinary binary;
 
@@ -71,7 +76,7 @@ static ERL_NIF_TERM nodelua_send_core(ErlNifEnv* env, int argc, const ERL_NIF_TE
     }
     else
     {
-      result = enif_make_badarg(env);
+      result = make_error_tuple(env, ATOM_MEMORY, "could not allocate memory for sending message");
     }    
   }
   else
