@@ -11,6 +11,8 @@ struct message_queue
   queue_ptr processing;
   ErlNifEnv* env_processing;
 
+  ErlNifEnv* env_sending;
+
   ErlNifRWLock* swap_lock;
 };
 
@@ -41,6 +43,8 @@ void destroy_message_queue(message_queue_ptr messages)
     enif_free_env(messages->env_incoming);
   if(NULL != messages->env_processing)
     enif_free_env(messages->env_processing);
+  if(NULL != messages->env_sending)
+    enif_free_env(messages->env_sending);
   if(NULL != messages->swap_lock)
     enif_rwlock_destroy(messages->swap_lock);
   if(NULL != messages)
@@ -71,6 +75,10 @@ message_queue_ptr create_message_queue()
 
   message_queue->env_processing = enif_alloc_env();
   if(NULL == message_queue->env_processing)
+    goto error_create_message_queue;
+
+  message_queue->env_sending = enif_alloc_env();
+  if(NULL == message_queue->env_sending)
     goto error_create_message_queue;
 
   return message_queue;
@@ -115,12 +123,16 @@ int message_queue_push(message_queue_ptr messages, ERL_NIF_TERM message)
 }
 
 
-
 ErlNifEnv* message_queue_process_getenv(message_queue_ptr messages)
 {
   return messages->env_processing;  
 }
 
+
+ErlNifEnv* message_queue_sending_getenv(message_queue_ptr messages)
+{
+  return messages->env_sending;  
+}
 
 
 int message_queue_pop( message_queue_ptr messages, ERL_NIF_TERM *message)

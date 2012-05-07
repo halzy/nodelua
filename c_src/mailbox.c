@@ -49,7 +49,7 @@ static int send_message(lua_State* lua)
 	message_queue_ptr messages = get_messages(lua);
 
 	// who do we send the message to?
-	ErlNifEnv* env = message_queue_process_getenv( messages );
+	ErlNifEnv* env = message_queue_sending_getenv( messages );
 
 	// validate some args
 	terminator_lua_checkpid(lua, 1);
@@ -64,11 +64,11 @@ static int send_message(lua_State* lua)
 			ErlNifPid pid;
 			if(enif_get_local_pid(env, pid_term, &pid))
 			{
-				enif_send(env, &pid, env, message);
+				enif_send(NULL, &pid, env, message);
 			}
 		}
 	}
-
+	enif_clear_env(env);
 
 	return 0;
 }
