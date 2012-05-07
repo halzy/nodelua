@@ -9,20 +9,22 @@
 #include <assert.h>
 
 /* TODO List:
-Message Queue system so we can pass messages
-Embed a function in lua to get the terms from the message queue.
-Embed a function in lua so it can send messages.
 Send lua error results back to erlang
+
 Create thread pool to work the lua states
+
 Interrupt threads that are taking too much time
   may need no move away from using erlang thread API and using posix threads
   pthread_t pthread_self(void)
+
+Remove foo_ptr references, just use the pointers
 
 socket reference:
   https://bitbucket.org/liamdevine/luasocket_ipv6_lua_51_52/src/538dcef303e2/src/socket_scripts.c
 translation ref:
   https://github.com/davisp/emonk/blob/master/c_src/to_js.c
-
+module ref:
+  https://github.com/carvalho/numlua/blob/master/numlua.h
 */
 
 // Prototypes
