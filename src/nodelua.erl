@@ -92,7 +92,9 @@ performance_test() ->
     {ok, Script} = file:read_file("../scripts/performance.lua"),
     {ok, Ref} = run(Script),
     {Time, _} = timer:tc(fun performance_messages/1, [Ref]),
-    erlang:display(Ref),
+    % have to keep a referenco to Ref otherwise it will be
+    % garbage collected half way through processing
+    io_lib:format("~p took ~p to process~n", [Ref, Time]),
     erlang:display(Time).
 
 -endif.
