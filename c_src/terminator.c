@@ -338,10 +338,6 @@ static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 			push_nif_list(lua, message, env);
 		}
 	}
-	else if(erl_is_number(env, message))
-	{
-		push_nif_number(lua, message, env);
-	}
 	else if(enif_is_tuple(env, message))
 	{	
 		push_nif_tuple(lua, message, env);
@@ -371,6 +367,11 @@ static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 		//printf("#port\n");
 		luaL_checkstack(lua, 1, ERROR_STACK_MESSAGE);
 		lua_pushliteral(lua, "sending a port is not supported");
+	}
+	else
+	{
+		// thank you r14 -- must be a number
+		push_nif_number(lua, message, env);
 	}
 }
 
