@@ -1,4 +1,5 @@
 #include "terminator.h"
+#include "nl_util.h"
 
 #include <lua.h>
 #include <lualib.h>
@@ -15,6 +16,7 @@ static const char* types[] =
 	TYPE_REF,
 	0
 };
+
 
 #define ERROR_STACK_MESSAGE "Could not grow stack large enough to read message."
 
@@ -336,7 +338,7 @@ static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 			push_nif_list(lua, message, env);
 		}
 	}
-	else if(enif_is_number(env, message))
+	else if(erl_is_number(env, message))
 	{
 		push_nif_number(lua, message, env);
 	}
