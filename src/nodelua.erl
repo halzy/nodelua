@@ -44,7 +44,7 @@ send_core(_Ref, _Message) ->
 -ifdef(TEST).
 
 basic_test() ->
-    {ok, Script} = file:read_file("../scripts/basic_test.lua"),
+    {ok, Script} = file:read_file("../test_scripts/basic_test.lua"),
     {ok, Ref} = run(Script),
     ?assertEqual(ok, send(Ref, ok)).
 
@@ -56,7 +56,7 @@ bounce_message(Ref, Message, Expected) ->
     end.
 
 translation_test() ->
-    {ok, Script} = file:read_file("../scripts/incoming_message.lua"),
+    {ok, Script} = file:read_file("../test_scripts/incoming_message.lua"),
     {ok, Ref} = run(Script),
     bounce_message(Ref, ok, <<"ok">>),
     bounce_message(Ref, <<"mkay">>, <<"mkay">>),
@@ -89,7 +89,7 @@ performance_messages(Ref) ->
     [ send(Ref, X) || X <- lists:seq(1, 100000) ],
     [ receive Y -> Z = erlang:trunc(Y), ?assertEqual(X, Z) end || X <- lists:seq(1, 10000) ].
 performance_test() ->
-    {ok, Script} = file:read_file("../scripts/performance.lua"),
+    {ok, Script} = file:read_file("../test_scripts/performance.lua"),
     {ok, Ref} = run(Script),
     {Time, _} = timer:tc(fun performance_messages/1, [Ref]),
     % have to keep a referenco to Ref otherwise it will be
