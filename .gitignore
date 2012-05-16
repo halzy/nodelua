@@ -1,0 +1,6 @@
+*.o
+*.beam
+.DS_Store
+*.so
+ebin/*
+.eunit/*
