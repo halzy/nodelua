@@ -1,6 +1,6 @@
 -module(nodelua).
 
--export([run/1, send/2]).
+-export([run/1, send/2, load/3]).
 -export([run_core/1, send_core/2]).
 
 -on_load(init/0).
@@ -29,7 +29,10 @@ run(Script) ->
     run_core(Script).
 
 send(Lua, Message) ->
-    send_core(Lua, [{pid, self()}, {data, Message}]).
+    send_core(Lua, [{pid, self()}, {type, mail}, {data, Message}]).
+
+load(Lua, Path, Module) ->
+    send_core(Lua, [{pid, self()}, {type, load}, {module, Module}, {path, Path}]).
 
 run_core(_Script) ->
     ?nif_stub.
@@ -96,5 +99,11 @@ performance_test() ->
     % garbage collected half way through processing
     io_lib:format("~p took ~p to process~n", [Ref, Time]),
     erlang:display(Time).
+
+sandbox_test() ->
+    {ok, Script} = file:read_file("../scripts/main.lua"),
+    {ok, Ref} = run(Script),
+    ?assertEqual(ok, load(Ref, <<"../scripts">>, <<"test">>)),
+    ?assertEqual(ok, send(Ref, ok)).
 
 -endif.
