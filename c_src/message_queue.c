@@ -11,6 +11,7 @@ struct message_queue
   queue_ptr processing;
   ErlNifEnv* env_processing;
 
+  // cleared after every send
   ErlNifEnv* env_sending;
 
   ErlNifRWLock* swap_lock;
