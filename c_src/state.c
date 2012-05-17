@@ -4,9 +4,10 @@
 #include "queue.h"
 #include "nl_util.h"
 
-
 #include <string.h>
 #include <stdio.h>
+
+#include <assert.h>
 
 typedef struct resource* resource_ptr;
 typedef struct work* work_ptr;
@@ -22,7 +23,7 @@ typedef enum WORK_STATES
 struct work
 {
 	erllua_ptr erllua;
-	resource_ptr resource;
+	unsigned ref_count;
 
 	ErlNifRWLock* rwlock;
 	WORK_STATE run_state;
@@ -51,15 +52,20 @@ static state_ptr get_state(ErlNifEnv* env)
 
 static void destroy_work(void* data)
 {
+	printf("destroy_work(%p)\n", data);
 	work_ptr work = (work_ptr) data;
 	
 	enif_rwlock_rwlock(work->rwlock);
-	if(NULL != work->resource)
+	unsigned ref_count = work->ref_count;
+	enif_rwlock_rwunlock(work->rwlock);
+
+	// destroy should never be called unless all references 
+	// to the work have been released
+	assert(0 == ref_count);
+	if(0 != ref_count)
 	{
-		// let the GC system know that we are already gone 
-		work->resource->work = NULL;
+		return;
 	}
-	enif_rwlock_rwlock(work->rwlock);
 
 	if(NULL != work->erllua)
 	{
@@ -131,9 +137,6 @@ ERL_NIF_TERM state_add_script(ErlNifEnv* env, const char * data, size_t size, co
 		result = make_error_tuple(env, ATOM_MEMORY, "error creating work unit");
 		goto error_add_script;
 	}
-	// they know about each other and will null out their 
-	// reference in the other when destroyed
-	resource->work->resource = resource;
 
 	ERL_NIF_TERM resource_handle = enif_make_resource(env, resource);
 	// release our reference to the new erlang variable, when we return
@@ -141,6 +144,10 @@ ERL_NIF_TERM state_add_script(ErlNifEnv* env, const char * data, size_t size, co
 	// reference is lost. This is how we can tell when the system is
 	// done with a script.
 	enif_release_resource(resource);
+
+	// increase the ref count for the work
+	++(resource->work->ref_count);
+
 	result = enif_make_tuple2(env, ATOM_OK, resource_handle);
 
 	return result;
@@ -150,7 +157,7 @@ error_add_script:
 	if(NULL != resource)
 	{
 		// if we failed to make the erllua, we need to free the 'work'
-		// we do not need to free the 'resource' because it will be GC'd		
+		// we do not need to free the 'resource' because it will be GC'd
 		if(NULL != resource->work)
 		{
 			destroy_work(resource->work);
@@ -174,12 +181,14 @@ static void resource_gc(ErlNifEnv* env, void* arg)
 
 	resource_ptr resource = (resource_ptr) arg;
 
-	// let the work know that the resource is gone and it should be shut down too
-	if(NULL != resource->work)
+	// remove our reference to the work unit
+	enif_rwlock_rwlock(resource->work->rwlock);
+	unsigned ref_count = --(resource->work->ref_count);
+	enif_rwlock_rwunlock(resource->work->rwlock);
+
+	if(0 == ref_count)
 	{
-		enif_rwlock_rwlock(resource->work->rwlock);
-		resource->work->resource = NULL;
-		enif_rwlock_rwunlock(resource->work->rwlock);
+		destroy_work(resource->work);
 	}
 }
 
@@ -282,9 +291,9 @@ static void* thread_main(void* state_ref)
 		int lua_state = erllua_run(work->erllua);
 
 		// items in the work queue may be GC'd by erlang, this is
-		// signaled by the resource property being set to NULL
+		// signaled by the ref_count becomming zero
 		enif_rwlock_rlock(work->rwlock);
-		int destroy = (NULL == work->resource);
+		int destroy = (0 == work->ref_count);
 		enif_rwlock_runlock(work->rwlock);
 
 		if(destroy)
