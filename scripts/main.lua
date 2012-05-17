@@ -54,7 +54,7 @@ function main()
 
 		-- run the script if we have one, giving it the messages
 		if( update_function ) then
-			pcall(update_function, inbox)
+			assert(pcall(update_function, inbox))
 		end
 
 		-- somehow let the script send messages
