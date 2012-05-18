@@ -3,15 +3,16 @@
 -export([run/1, send/2, load/3]).
 -export([run_core/1, send_core/2]).
 
+-ifdef(TEST).
+-export([sandbox_echo_process/0]).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
 -on_load(init/0).
 
 -define(nif_stub, nif_stub_error(?LINE)).
 nif_stub_error(Line) ->
     erlang:nif_error({nif_not_loaded,module,?MODULE,line,Line}).
-
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
--endif.
 
 init() ->
   PrivDir = case code:priv_dir(?MODULE) of
@@ -45,6 +46,9 @@ send_core(_Ref, _Message) ->
 %% EUnit tests
 %% ===================================================================
 -ifdef(TEST).
+
+crash_test() ->
+    [ basic_test() || _ <- lists:seq(1, 100) ].
 
 basic_test() ->
     {ok, Script} = file:read_file("../test_scripts/basic_test.lua"),
@@ -100,10 +104,27 @@ performance_test() ->
     io_lib:format("~p took ~p to process~n", [Ref, Time]),
     erlang:display(Time).
 
+sandbox_echo_process() ->
+    receive
+        die -> ok;
+        Me -> 
+            erlang:display(Me),
+            sandbox_echo_process()
+    end.
+
 sandbox_test() ->
+    %receive
+    %    Data -> erlang:display(Data)
+    %end,
     {ok, Script} = file:read_file("../scripts/main.lua"),
     {ok, Ref} = run(Script),
     ?assertEqual(ok, load(Ref, <<"../scripts">>, <<"test">>)),
-    ?assertEqual(ok, send(Ref, ok)).
+    EchoPid = spawn(nodelua, sandbox_echo_process, []),
+    ?assertEqual(ok, send(Ref, [{echo, EchoPid}])),
+    ?assertEqual(ok, send(Ref, [{echo, self()}])),
+    %receive
+    %    Data -> erlang:display("aa"), erlang:display(Data), erlang:display("bb"), EchoPid ! die
+    %end.
+    ok.
 
 -endif.
