@@ -20,6 +20,7 @@ struct erllua
   ERLLUA_STATE state;
 
   message_queue_ptr messages;
+  int do_shutdown;
 };
 
 struct lua_input_script
@@ -29,7 +30,15 @@ struct lua_input_script
   int done;
 };
 
+int erllua_shutting_down(erllua_ptr erllua)
+{
+  return erllua->do_shutdown;
+}
 
+void erllua_shut_down(erllua_ptr erllua, int shutdown)
+{
+  erllua->do_shutdown = shutdown;
+}
 
 int erllua_send_message(erllua_ptr erllua, ERL_NIF_TERM message)
 {
@@ -117,7 +126,7 @@ static const char *read_input_script(lua_State *env, void *user_data, size_t *si
 }
 
 // returns {ok, handle} and sets erllua_result or {error, {kind, message}} and erllua_result is NULL
-erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, const char* name)
+erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, const char* name, ErlNifResourceType* erl_resource_type)
 {
   (void) env; // unused
   
@@ -127,6 +136,7 @@ erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, 
 
   memset(erllua, 0, sizeof(erllua));
   erllua->state = ERLLUA_INIT;
+  erllua->do_shutdown = 0;
 
   // create the message queue
   erllua->messages = create_message_queue();
@@ -169,7 +179,7 @@ erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, 
   }
 
   // add my libs here
-  register_mailbox(erllua->coroutine, erllua->messages);
+  register_mailbox(erllua->coroutine, erllua, erllua->messages, erl_resource_type);
 
   return erllua;
 

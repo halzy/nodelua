@@ -45,6 +45,8 @@ struct state
 
 typedef struct state* state_ptr;
 
+static int send_message_core( state_ptr state, work_ptr work, ERL_NIF_TERM message);
+
 static state_ptr get_state(ErlNifEnv* env)
 {
 	return (state_ptr) enif_priv_data(env);
@@ -52,7 +54,6 @@ static state_ptr get_state(ErlNifEnv* env)
 
 static void destroy_work(void* data)
 {
-	printf("destroy_work(%p)\n", data);
 	work_ptr work = (work_ptr) data;
 	
 	enif_rwlock_rwlock(work->rwlock);
@@ -80,7 +81,7 @@ static void destroy_work(void* data)
 	enif_free(work);
 }
 
-static work_ptr create_work(ErlNifEnv* env, const char * data, size_t size, const char * name)
+static work_ptr create_work(ErlNifEnv* env, const char * data, size_t size, const char * name, ErlNifResourceType* resource_type)
 {
 	// allocate the actual work unit, this is pointed to by the resource
 	// and we will know that all references have been removed from this
@@ -99,7 +100,7 @@ static work_ptr create_work(ErlNifEnv* env, const char * data, size_t size, cons
 
 	// put a new erllua into it. If there is a script error we will find out
 	// later when a thread processes the script
-	work->erllua = erllua_create(env, data, size, name); 
+	work->erllua = erllua_create(env, data, size, name, resource_type); 
 	if(NULL == work->erllua)
 		goto error_create_work;
 
@@ -131,7 +132,7 @@ ERL_NIF_TERM state_add_script(ErlNifEnv* env, const char * data, size_t size, co
 	// clear it out
 	memset(resource, 0, sizeof(struct resource));
 
-	resource->work = create_work(env, data, size, name);
+	resource->work = create_work(env, data, size, name, state->resource_type);
 	if(NULL == resource->work)
 	{
 		result = make_error_tuple(env, ATOM_MEMORY, "error creating work unit");
@@ -170,10 +171,35 @@ error_add_script:
 	return result;
 }
 
+// A CaS like operator for the work state, with an option to enqueue
+static int enqueue_work_cas(WORK_STATE compare_state, WORK_STATE enqueue_state, WORK_STATE else_state, state_ptr state, work_ptr work)
+{
+	int result = 0;
+
+	enif_rwlock_rwlock(work->rwlock);
+	if(compare_state == work->run_state)
+	{
+		work->run_state = enqueue_state;
+		result = 1;
+	}
+	else
+	{
+		work->run_state = else_state;
+	}
+	enif_rwlock_rwunlock(work->rwlock);	
+
+	if(result)
+	{
+		queue_push(state->work_queue, work);
+	}
+
+	return result;
+}
 
 static void resource_gc(ErlNifEnv* env, void* arg)
 {
-	(void) env; // unused
+	// !!! This function is not allowed to call any
+	// !!! term making functions !!!
 
 	// TODO @@@ notify the script that it will be destroyed
 	// and that it has one last chance to run before it 
@@ -181,14 +207,17 @@ static void resource_gc(ErlNifEnv* env, void* arg)
 
 	resource_ptr resource = (resource_ptr) arg;
 
+	int destroy = 0;
+
 	// remove our reference to the work unit
 	enif_rwlock_rwlock(resource->work->rwlock);
-	unsigned ref_count = --(resource->work->ref_count);
+	destroy = (0 == --(resource->work->ref_count));
 	enif_rwlock_rwunlock(resource->work->rwlock);
 
-	if(0 == ref_count)
+	if(destroy)
 	{
-		destroy_work(resource->work);
+		state_ptr state = get_state(env);
+		enqueue_work_cas( WORK_WAIT, WORK_ENQUEUED, WORK_REQUEUE, state, resource->work);
 	}
 }
 
@@ -248,30 +277,7 @@ void state_destroy(ErlNifEnv* env)
 }
 
 
-// A CaS like operator for the work state, with an option to enqueue
-static int enqueue_work_cas(WORK_STATE compare_state, WORK_STATE enqueue_state, WORK_STATE else_state, state_ptr state, work_ptr work)
-{
-	int result = 0;
 
-	enif_rwlock_rwlock(work->rwlock);
-	if(compare_state == work->run_state)
-	{
-		work->run_state = enqueue_state;
-		result = 1;
-	}
-	else
-	{
-		work->run_state = else_state;
-	}
-	enif_rwlock_rwunlock(work->rwlock);	
-
-	if(result)
-	{
-		queue_push(state->work_queue, work);
-	}
-
-	return result;
-}
 
 
 static void* thread_main(void* state_ref)
@@ -286,6 +292,7 @@ static void* thread_main(void* state_ref)
 
 		enif_rwlock_rwlock(work->rwlock);
 		work->run_state = WORK_PROCESSING;
+		erllua_shut_down(work->erllua, (0 == work->ref_count));
 		enif_rwlock_rwunlock(work->rwlock);
 
 		int lua_state = erllua_run(work->erllua);
@@ -294,6 +301,7 @@ static void* thread_main(void* state_ref)
 		// signaled by the ref_count becomming zero
 		enif_rwlock_rlock(work->rwlock);
 		int destroy = (0 == work->ref_count);
+		erllua_shut_down(work->erllua, destroy);
 		enif_rwlock_runlock(work->rwlock);
 
 		if(destroy)
@@ -326,19 +334,26 @@ int state_add_worker(ErlNifEnv* env)
     return enif_thread_create("", &(state->thread), thread_main, state, state->thread_opts);
 }
 
+static int send_message_core(state_ptr state, work_ptr work, ERL_NIF_TERM message)
+{
+	int result = erllua_send_message(work->erllua, message);
+	if(result)
+	{
+		enqueue_work_cas( WORK_WAIT, WORK_ENQUEUED, WORK_REQUEUE, state, work);
+	}
+	return result;
+}
+
 int state_send_message(ErlNifEnv* env, ERL_NIF_TERM resource_term, ERL_NIF_TERM message)
 {
 	state_ptr state = get_state(env);
 
 	resource_ptr resource = NULL;
+
 	int result = enif_get_resource(env, resource_term, state->resource_type, (void**)&resource);
 	if(result)
 	{
-		result = erllua_send_message(resource->work->erllua, message);
-		if(result)
-		{
-			enqueue_work_cas( WORK_WAIT, WORK_ENQUEUED, WORK_REQUEUE, state, resource->work);
-		}
+		result = send_message_core(state, resource->work, message);
 	}
 
 	return result;

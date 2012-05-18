@@ -1,5 +1,6 @@
 #include "terminator.h"
 #include "nl_util.h"
+#include "erllua.h"
 
 #include <lua.h>
 #include <lualib.h>
@@ -7,20 +8,22 @@
 
 #include <string.h>
 
-#define TYPE_PID "mailbox.id"
-#define TYPE_REF "nodelua.terminator.ref"
+#define TYPE_ERL_PID "mailbox.id"
+#define TYPE_ERL_REF "nodelua.terminator.ref"
+#define TYPE_LUA_ADDRESS "mailbox.address"
 
 static const char* types[] = 
 {
-	TYPE_PID,
-	TYPE_REF,
+	TYPE_ERL_PID,
+	TYPE_ERL_REF,
+	TYPE_LUA_ADDRESS,
 	0
 };
 
 
 #define ERROR_STACK_MESSAGE "Could not grow stack large enough to read message."
 
-static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env);
+static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env, ErlNifResourceType* resource_type);
 
 // checks to see if the tuple is something we would put as a KV pair in a lua table
 // puts the key(0) and value(1) in the array
@@ -50,7 +53,7 @@ static int push_table_iskvp(ErlNifEnv* env, ERL_NIF_TERM tuple, const ERL_NIF_TE
 
 
 // pushes the items in the array into the table on the top of the stack
-static void push_table_append(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM array_items[], int array_count)
+static void push_table_append(lua_State* lua, ErlNifEnv* env, ErlNifResourceType* resource_type, ERL_NIF_TERM array_items[], int array_count)
 {
 	int lua_index = 0;
 	int index = 0;
@@ -65,13 +68,13 @@ static void push_table_append(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM array
 			lua_pop(lua, 1);
 		} while(!index_open);
 
-		push_nif_term(lua, array_items[index], env);
+		push_nif_term(lua, array_items[index], env, resource_type);
 		lua_rawseti(lua, -2, lua_index);
 	}
 }
 
 // it is expected that a table is on top of the lua stack
-static int push_table_set(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM tuple)
+static int push_table_set(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM tuple, ErlNifResourceType* resource_type)
 {
 	int result = 0;
 	const ERL_NIF_TERM* tuple_terms;
@@ -79,7 +82,7 @@ static int push_table_set(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM tuple)
 	if(push_table_iskvp(env, tuple, &tuple_terms))
 	{
 		// stack: table
-		push_nif_term(lua, tuple_terms[0], env);
+		push_nif_term(lua, tuple_terms[0], env, resource_type);
 		// stack: table, key
 
 		int insert = 0;
@@ -104,7 +107,7 @@ static int push_table_set(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM tuple)
 
 		if(insert)
 		{
-			push_nif_term(lua, tuple_terms[1], env);
+			push_nif_term(lua, tuple_terms[1], env, resource_type);
 			// stack: table, key, value
 			lua_rawset(lua, -3);
 			// stack: table
@@ -207,7 +210,7 @@ static inline int push_nif_number(lua_State* lua, ERL_NIF_TERM message, ErlNifEn
 	return result;
 }
 
-static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
+static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env, ErlNifResourceType* resource_type)
 {
 	// TODO @@@ this function and push_nif_tuple are very very similar, refactor
 	int map_count = 0;
@@ -239,13 +242,13 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env)
 
 		for(tuple_index = 0; tuple_index < arity; ++tuple_index)
 		{
-			if(!push_table_set(lua, env, terms[tuple_index]))
+			if(!push_table_set(lua, env, terms[tuple_index], resource_type))
 			{
 				array_items[index++] = terms[tuple_index];
 			}
 		}
 
-		push_table_append(lua, env, array_items, index);
+		push_table_append(lua, env, resource_type, array_items, index);
 	}
 }
 
@@ -256,22 +259,28 @@ static void push_nif_pid(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 	ErlNifPid *pid = (ErlNifPid *)lua_newuserdata(lua, sizeof(ErlNifPid));
 	if(enif_get_local_pid(env, message, pid))
 	{
-		luaL_getmetatable(lua, TYPE_PID);
+		luaL_getmetatable(lua, TYPE_ERL_PID);
 		lua_setmetatable(lua, -2);
 	}
 }
 
-static void push_nif_ref(lua_State* lua, ERL_NIF_TERM message)
+static void push_nif_ref(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env, ErlNifResourceType* resource_type)
 {
 	luaL_checkstack(lua, 2, ERROR_STACK_MESSAGE);
 
+	erllua_ptr erllua;
+	if(enif_get_resource( env, message, resource_type, (void**)&erllua))
+	{
+		printf("(Found one!)\n");
+	}
+
 	ERL_NIF_TERM *ref = (ERL_NIF_TERM *)lua_newuserdata(lua, sizeof(ERL_NIF_TERM));
 	*ref = message;
-	luaL_getmetatable(lua, TYPE_REF);
+	luaL_getmetatable(lua, TYPE_ERL_REF);
 	lua_setmetatable(lua, -2);
 }
 
-static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
+static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env, ErlNifResourceType* resource_type)
 {
 	int map_count = 0;
 	int array_count = 0;
@@ -300,18 +309,18 @@ static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env)
 		int index = 0;
 		while(enif_get_list_cell(env, tail, &head, &tail))
 		{
-			if(!push_table_set(lua, env, head))
+			if(!push_table_set(lua, env, head, resource_type))
 			{
 				array_items[index++] = head;
 			}
 		}
 
-		push_table_append(lua, env, array_items, index);
+		push_table_append(lua, env, resource_type, array_items, index);
 	}
 }
 
 
-static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
+static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env, ErlNifResourceType* resource_type)
 {
 	if(enif_is_atom(env, message))
 	{
@@ -335,12 +344,12 @@ static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 		{
 			// TODO @@@ try to send it as an IO list first and
 			// if that fails send it as a regular list
-			push_nif_list(lua, message, env);
+			push_nif_list(lua, message, env, resource_type);
 		}
 	}
 	else if(enif_is_tuple(env, message))
 	{	
-		push_nif_tuple(lua, message, env);
+		push_nif_tuple(lua, message, env, resource_type);
 	}
 	else if(enif_is_pid(env, message))
 	{
@@ -348,7 +357,7 @@ static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 	}
 	else if(enif_is_ref(env, message))
 	{
-		push_nif_ref(lua, message);
+		push_nif_ref(lua, message, env, resource_type);
 	}
 	else if(enif_is_exception(env, message))
 	{
@@ -375,9 +384,9 @@ static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 	}
 }
 
-void terminator_tolua(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
+void terminator_tolua(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env, ErlNifResourceType* resource_type)
 {
-	push_nif_term(lua, message, env);
+	push_nif_term(lua, message, env, resource_type);
 }
 
 
@@ -483,7 +492,7 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 			if(lua_getmetatable (lua, top))
 			{
 				// put the pid metatable onto the stack
-				luaL_newmetatable(lua, TYPE_PID);
+				luaL_newmetatable(lua, TYPE_ERL_PID);
 
 				// compare the two metatables
 				if(lua_compare(lua, -1, -2, LUA_OPEQ))
@@ -497,7 +506,7 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 				lua_pop(lua, 1);				
 
 				// push the ref metatable
-				luaL_newmetatable(lua, TYPE_REF);
+				luaL_newmetatable(lua, TYPE_ERL_REF);
 				if(lua_compare(lua, -1, -2, LUA_OPEQ))
 				{
 					ERL_NIF_TERM* nif_ptr = (ERL_NIF_TERM*) lua_touserdata(lua, top);
@@ -544,7 +553,7 @@ int terminator_toerl(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv* env)
 
 void* terminator_lua_checkpid(lua_State* lua, int index)
 {
-	return luaL_checkudata(lua, index, TYPE_PID);
+	return luaL_checkudata(lua, index, TYPE_ERL_PID);
 }
 
 void terminator_create_types(lua_State* lua)
