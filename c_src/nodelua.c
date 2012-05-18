@@ -9,14 +9,17 @@
 #include <assert.h>
 
 /* TODO List:
-Send lua error results back to erlang
 
 When sending out messages, send a referenco of the resource as well
   so that it can be responded to
 
+Have a different type for the 'address reference' in erlang and lua
+  so that we can GC them and update them separately and transfer them
+
 lua should be able to have functions as callbacks for async functions
   file.load(name, callback)
 
+Send lua error results back to erlang
 
 create a sandbox for running scripts in the main lua script
   http://lua-users.org/wiki/LuaModuleFunctionCritiqued
