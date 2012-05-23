@@ -1,3 +1,5 @@
+#include "node_memory.h"
+
 #include "queue.h"
 #include <string.h>
 #include <assert.h>
@@ -28,7 +30,7 @@ struct queue
 // return a new queue or null if it couldn't be allocated
 queue_ptr queue_create( void (*destroy_node)(void*) )
 {
-	queue_ptr queue = (queue_ptr) enif_alloc(sizeof(struct queue));
+	queue_ptr queue = (queue_ptr) node_alloc(sizeof(struct queue));
 
 	if(NULL == queue)
 		goto error;
@@ -83,13 +85,15 @@ void queue_destroy(queue_ptr queue)
 		enif_cond_destroy(queue->cond);
 	}
 
-	enif_free(queue);
+	memset(queue, 0, sizeof(struct queue));
+
+	node_free(queue);
 }
 
 // returns 1 on success, 0 on failure
 static int queue_insert(queue_ptr queue, void* data, int location)
 {
-	node_ptr node = (node_ptr) enif_alloc(sizeof(struct node));
+	node_ptr node = (node_ptr) node_alloc(sizeof(struct node));
 
 	if(NULL != node)
 	{
@@ -172,7 +176,7 @@ static int queue_pop_core(queue_ptr queue, void **data, const int wait)
 	if(NULL != node)
 	{
 		*data = node->data;
-		enif_free(node);
+		node_free(node);
 		return 1;
 	}
 

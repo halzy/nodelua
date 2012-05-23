@@ -1,3 +1,5 @@
+#include "node_memory.h"
+
 #include "erllua.h"
 #include "nl_util.h"
 #include "queue.h"
@@ -50,7 +52,8 @@ void erllua_destroy(erllua_ptr erllua)
 {
   lua_close(erllua->lua);
   destroy_message_queue(erllua->messages);
-  enif_free(erllua);
+  memset(erllua, 0, sizeof(struct erllua));
+  node_free(erllua);
 }
 
 
@@ -130,11 +133,11 @@ erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, 
 {
   (void) env; // unused
   
-  erllua_ptr erllua = enif_alloc(sizeof(erllua));
+  erllua_ptr erllua = node_alloc(sizeof(struct erllua));
   if(NULL == erllua)
     goto error_create;
 
-  memset(erllua, 0, sizeof(erllua));
+  memset(erllua, 0, sizeof(struct erllua));
   erllua->state = ERLLUA_INIT;
   erllua->do_shutdown = 0;
 

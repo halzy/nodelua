@@ -1,5 +1,5 @@
+#include "node_memory.h"
 #include "message_queue.h"
-
 #include "queue.h"
 #include <stdio.h>
 
@@ -23,7 +23,7 @@ static ERL_NIF_TERM destroy_message(void* data)
   ERL_NIF_TERM message;
   ERL_NIF_TERM *message_copy = (ERL_NIF_TERM*)data;
   message = *message_copy;
-  enif_free(data);
+  node_free(data);
   return message; 
 }
 
@@ -49,12 +49,12 @@ void destroy_message_queue(message_queue_ptr messages)
   if(NULL != messages->swap_lock)
     enif_rwlock_destroy(messages->swap_lock);
   if(NULL != messages)
-    enif_free(messages);
+    node_free(messages);
 }
 
 message_queue_ptr create_message_queue()
 {
-  message_queue_ptr message_queue = enif_alloc(sizeof(struct message_queue));
+  message_queue_ptr message_queue = node_alloc(sizeof(struct message_queue));
   if(NULL == message_queue)
 	goto error_create_message_queue;
 
@@ -107,7 +107,7 @@ void message_queue_process_begin(message_queue_ptr messages)
 
 int message_queue_push(message_queue_ptr messages, ERL_NIF_TERM message)
 {
-  ERL_NIF_TERM* message_copy = enif_alloc(sizeof(ERL_NIF_TERM));
+  ERL_NIF_TERM* message_copy = node_alloc(sizeof(ERL_NIF_TERM));
   if(NULL == message_copy)
     return 0;
 
@@ -118,7 +118,7 @@ int message_queue_push(message_queue_ptr messages, ERL_NIF_TERM message)
   
   if(!result)
   {
-    enif_free(message_copy);
+    node_free(message_copy);
   }
   return result;
 }

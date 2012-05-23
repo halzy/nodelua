@@ -1,3 +1,4 @@
+#include "node_memory.h"
 
 #include "state.h"
 #include "erllua.h"
@@ -78,7 +79,8 @@ static void destroy_work(void* data)
 		enif_rwlock_destroy(work->rwlock);
 	}
 
-	enif_free(work);
+
+	node_free(work);
 }
 
 static work_ptr create_work(ErlNifEnv* env, const char * data, size_t size, const char * name, ErlNifResourceType* resource_type)
@@ -86,7 +88,7 @@ static work_ptr create_work(ErlNifEnv* env, const char * data, size_t size, cons
 	// allocate the actual work unit, this is pointed to by the resource
 	// and we will know that all references have been removed from this
 	// work unit when the resource destructor is called
-	work_ptr work = (work_ptr) enif_alloc(sizeof(struct work));
+	state_work_ptr work = (state_work_ptr) node_alloc(sizeof(struct state_work));
 	if(NULL == work)
 		goto error_create_work;
 
@@ -224,7 +226,7 @@ static void resource_gc(ErlNifEnv* env, void* arg)
 
 void* state_create(ErlNifEnv* env)
 {
-    state_ptr state = (state_ptr) enif_alloc(sizeof(struct state));
+    state_ptr state = (state_ptr) node_alloc(sizeof(struct state));
     memset(state, 0, sizeof(struct state));
 
 	ErlNifResourceType* resource_type = enif_open_resource_type(env, NULL, "nodelua_RESOURCE",
@@ -271,7 +273,7 @@ void state_destroy(ErlNifEnv* env)
 	}
 	if(NULL != state)
 	{
-		enif_free(state);
+		node_free(state);
 		state = NULL;
 	}
 }

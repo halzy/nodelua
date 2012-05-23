@@ -1,3 +1,5 @@
+#include "node_memory.h"
+
 #include "terminator.h"
 #include "nl_util.h"
 #include "erllua.h"
@@ -458,7 +460,7 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 			// make sure we can grow the stack
 			luaL_checkstack(lua, 2, ERROR_STACK_MESSAGE);
 
-			ERL_NIF_TERM *new_table = (ERL_NIF_TERM*) enif_alloc(table_size * sizeof(ERL_NIF_TERM));
+			ERL_NIF_TERM *new_table = (ERL_NIF_TERM*) node_alloc(table_size * sizeof(ERL_NIF_TERM));
 			ERL_NIF_TERM *next_cell = new_table;
 
 			// table is at the top of the stack
@@ -480,7 +482,7 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 			if(NULL != new_table)
 			{
 				*result = enif_make_list_from_array(env, new_table, table_size);
-				enif_free(new_table);
+				node_free(new_table);
 			}
 
 			return 1;
