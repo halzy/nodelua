@@ -3,25 +3,24 @@
 #include "terminator.h"
 #include "nl_util.h"
 #include "erllua.h"
+#include "state.h"
 
 #include <lua.h>
 #include <lualib.h>
 #include <lauxlib.h>
 
 #include <string.h>
+#include <assert.h>
 
 #define TYPE_ERL_PID "mailbox.id"
 #define TYPE_ERL_REF "nodelua.terminator.ref"
 #define TYPE_LUA_ADDRESS "mailbox.address"
 
-static const char* types[] = 
+typedef struct mailbox_address* mailbox_address_ptr;
+struct mailbox_address
 {
-	TYPE_ERL_PID,
-	TYPE_ERL_REF,
-	TYPE_LUA_ADDRESS,
-	0
+	state_work_ptr state_work;
 };
-
 
 #define ERROR_STACK_MESSAGE "Could not grow stack large enough to read message."
 
@@ -57,6 +56,8 @@ static int push_table_iskvp(ErlNifEnv* env, ERL_NIF_TERM tuple, const ERL_NIF_TE
 // pushes the items in the array into the table on the top of the stack
 static void push_table_append(lua_State* lua, ErlNifEnv* env, ErlNifResourceType* resource_type, ERL_NIF_TERM array_items[], int array_count)
 {
+	int top = lua_gettop(lua);
+
 	int lua_index = 0;
 	int index = 0;
 	for(index = 0; index < array_count; ++index)
@@ -73,11 +74,15 @@ static void push_table_append(lua_State* lua, ErlNifEnv* env, ErlNifResourceType
 		push_nif_term(lua, array_items[index], env, resource_type);
 		lua_rawseti(lua, -2, lua_index);
 	}
+
+	assert(lua_gettop(lua) == top);
 }
 
 // it is expected that a table is on top of the lua stack
 static int push_table_set(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM tuple, ErlNifResourceType* resource_type)
 {
+	int top = lua_gettop(lua);
+
 	int result = 0;
 	const ERL_NIF_TERM* tuple_terms;
 
@@ -121,12 +126,14 @@ static int push_table_set(lua_State* lua, ErlNifEnv* env, ERL_NIF_TERM tuple, Er
 		}
 	}
 
+	assert(lua_gettop(lua) == top);
 	return result;
 }
 
 
 static inline int push_nif_atom(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 {
+	int top = lua_gettop(lua);
 	int result = 0;
 
 	// max length for atoms is 255
@@ -156,11 +163,15 @@ static inline int push_nif_atom(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv*
 		result = 1;
     }
 
+	assert(lua_gettop(lua) == top + result);
+
 	return result;
 }
 
 static inline int push_nif_binary(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 {
+	int top = lua_gettop(lua);
+
 	int result = 0;
 	ErlNifBinary binary;
 	if(enif_inspect_binary(env, message, &binary))
@@ -169,11 +180,16 @@ static inline int push_nif_binary(lua_State* lua, ERL_NIF_TERM message, ErlNifEn
 		lua_pushlstring(lua, (const char*)binary.data, binary.size);
 		result = 1;
 	}
+
+	assert(lua_gettop(lua) == top + result);
+
 	return result;
 }
 
 static inline int push_nif_number(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 {
+	int top = lua_gettop(lua);
+
 	int result = 0;
 
     int intval;
@@ -209,11 +225,15 @@ static inline int push_nif_number(lua_State* lua, ERL_NIF_TERM message, ErlNifEn
         result = 1;
     }
 
+	assert(lua_gettop(lua) == top+result);
+
 	return result;
 }
 
 static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env, ErlNifResourceType* resource_type)
 {
+	int top = lua_gettop(lua);
+
 	// TODO @@@ this function and push_nif_tuple are very very similar, refactor
 	int map_count = 0;
 	int array_count = 0;
@@ -252,10 +272,14 @@ static void push_nif_tuple(lua_State* lua, ERL_NIF_TERM tuple, ErlNifEnv* env, E
 
 		push_table_append(lua, env, resource_type, array_items, index);
 	}
+
+	assert(lua_gettop(lua) == top+1);
 }
 
 static void push_nif_pid(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 {
+	int top = lua_gettop(lua);
+
 	luaL_checkstack(lua, 2, ERROR_STACK_MESSAGE);
 
 	ErlNifPid *pid = (ErlNifPid *)lua_newuserdata(lua, sizeof(ErlNifPid));
@@ -264,26 +288,44 @@ static void push_nif_pid(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 		luaL_getmetatable(lua, TYPE_ERL_PID);
 		lua_setmetatable(lua, -2);
 	}
+
+	assert(lua_gettop(lua) == top+1);
 }
 
-static void push_nif_ref(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env, ErlNifResourceType* resource_type)
+void terminator_tolua_luaaddress(lua_State* lua, void* reference)
 {
-	luaL_checkstack(lua, 2, ERROR_STACK_MESSAGE);
+	assert(NULL != lua);
+	assert(NULL != reference);
+	int top = lua_gettop(lua);
 
-	erllua_ptr erllua;
-	if(enif_get_resource( env, message, resource_type, (void**)&erllua))
-	{
-		printf("(Found one!)\n");
-	}
+	mailbox_address_ptr address = (mailbox_address_ptr)lua_newuserdata(lua, sizeof(struct mailbox_address));
+	address->state_work = reference;
+	luaL_getmetatable(lua, TYPE_LUA_ADDRESS);
+	lua_setmetatable(lua, -2);
+	//state_work_addref( address->state_work );
+
+	assert(lua_gettop(lua) == top+1);
+}
+
+static void push_nif_ref(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
+{
+	(void)env; // unused
+	int top = lua_gettop(lua);
+
+	luaL_checkstack(lua, 2, ERROR_STACK_MESSAGE);
 
 	ERL_NIF_TERM *ref = (ERL_NIF_TERM *)lua_newuserdata(lua, sizeof(ERL_NIF_TERM));
 	*ref = message;
 	luaL_getmetatable(lua, TYPE_ERL_REF);
 	lua_setmetatable(lua, -2);
+
+	assert(lua_gettop(lua) == top+1);
 }
 
 static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env, ErlNifResourceType* resource_type)
 {
+	int top = lua_gettop(lua);
+
 	int map_count = 0;
 	int array_count = 0;
 	if(enif_is_list(env, list))
@@ -319,11 +361,15 @@ static void push_nif_list(lua_State* lua, ERL_NIF_TERM list, ErlNifEnv* env, Erl
 
 		push_table_append(lua, env, resource_type, array_items, index);
 	}
+
+	assert(lua_gettop(lua) == top+1);
 }
 
 
 static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env, ErlNifResourceType* resource_type)
 {
+	int top = lua_gettop(lua);
+
 	if(enif_is_atom(env, message))
 	{
 		push_nif_atom(lua, message, env);
@@ -359,7 +405,7 @@ static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env, 
 	}
 	else if(enif_is_ref(env, message))
 	{
-		push_nif_ref(lua, message, env, resource_type);
+		push_nif_ref(lua, message, env);
 	}
 	else if(enif_is_exception(env, message))
 	{
@@ -384,17 +430,20 @@ static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env, 
 		// thank you r14 -- must be a number
 		push_nif_number(lua, message, env);
 	}
+	assert(lua_gettop(lua) == top+1);
 }
 
 void terminator_tolua(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env, ErlNifResourceType* resource_type)
 {
+	int top = lua_gettop(lua);
 	push_nif_term(lua, message, env, resource_type);
+	assert(lua_gettop(lua) == top+1);
 }
 
 
 // takes the first term off of the lua stack and return it as an
 // erlang term in the state 'env'.
-static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv* env)
+static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv* env, ErlNifResourceType* resource_type)
 {
 	const int top = lua_gettop(lua);
 
@@ -403,6 +452,8 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 		case LUA_TNIL:
 		{
 			*result = enif_make_atom(env, "nil");
+			lua_pop( lua, 1);
+			assert(lua_gettop(lua) == top-1);
 			return 1;
 			break;
 		}
@@ -410,6 +461,8 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 		{
 			const lua_Number number = luaL_checknumber(lua, top);
 			*result = enif_make_double(env, (double)number);
+			lua_pop( lua, 1);
+			assert(lua_gettop(lua) == top-1);
 			return 1;
 			break;
 		}
@@ -417,6 +470,8 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 		{
 			const int truefalse = lua_toboolean(lua, top);
 			*result = truefalse ? enif_make_atom(env, "true") : enif_make_atom(env, "false");
+			lua_pop( lua, 1);
+			assert(lua_gettop(lua) == top-1);
 			return 1;
 			break;
 		}
@@ -442,7 +497,9 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 			{
 				luaL_error (lua, "could not convert lua string");
 			}
+			lua_pop( lua, 1);
 
+			assert(lua_gettop(lua) == top-1);
 			return 1;
 			break;
 		}
@@ -467,13 +524,14 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 			lua_pushnil(lua);  // nil as the first key
 			while (lua_next(lua, top) != 0) {
 				// uses 'key' (at index -2) and 'value' (at index -1)
-				ERL_NIF_TERM tuple_value;
-				terminator_toerl_core(lua, &tuple_value, env);
 
 				// remove 'value', keeps 'key' for next iteration
-				lua_pop(lua, 1);
+				ERL_NIF_TERM tuple_value;
+				terminator_toerl_core(lua, &tuple_value, env, resource_type);
+
 				ERL_NIF_TERM tuple_key;
-				terminator_toerl_core(lua, &tuple_key, env);
+				lua_pushvalue( lua, -1);
+				terminator_toerl_core(lua, &tuple_key, env, resource_type);
 
 				*next_cell = enif_make_tuple2(env, tuple_key, tuple_value);
 				next_cell++;
@@ -485,6 +543,8 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 				node_free(new_table);
 			}
 
+			lua_pop( lua, 1);
+			assert(lua_gettop(lua) == top-1);
 			return 1;
 			break;
 		}
@@ -493,63 +553,96 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 			// add metatable to stack
 			if(lua_getmetatable (lua, top))
 			{
-				// put the pid metatable onto the stack
-				luaL_newmetatable(lua, TYPE_ERL_PID);
 
+				// put the pid metatable onto the stack
 				// compare the two metatables
+				luaL_getmetatable(lua, TYPE_ERL_PID);
 				if(lua_compare(lua, -1, -2, LUA_OPEQ))
 				{
 					const ErlNifPid* userdata = (const ErlNifPid*) lua_touserdata(lua, top);
 					*result = enif_make_pid(env, userdata);
-					lua_pop(lua, 2);
+					lua_pop(lua, 3);
+					assert(lua_gettop(lua) == top-1);
 					return 1;
 				}
 				// pop the pid metatable
-				lua_pop(lua, 1);				
+				lua_pop(lua, 1);			
 
 				// push the ref metatable
-				luaL_newmetatable(lua, TYPE_ERL_REF);
+				luaL_getmetatable(lua, TYPE_ERL_REF);
 				if(lua_compare(lua, -1, -2, LUA_OPEQ))
 				{
 					ERL_NIF_TERM* nif_ptr = (ERL_NIF_TERM*) lua_touserdata(lua, top);
 					*result = (*nif_ptr);
-					lua_pop(lua, 2);
+					lua_pop(lua, 3);
+					assert(lua_gettop(lua) == top-1);
 					return 1;
 				}
-				// pop the ref metatable and the userdatas metatable
-				lua_pop(lua, 2);
+				lua_pop(lua, 1);
+				
+				// pop the ref metatable
+				luaL_getmetatable(lua, TYPE_LUA_ADDRESS);
+				if(lua_compare(lua, -1, -2, LUA_OPEQ))
+				{
+					mailbox_address_ptr address = (mailbox_address_ptr) lua_touserdata(lua, top);
+
+					assert(NULL != address);
+					state_work_ptr state_work = address->state_work;
+					assert(NULL != state_work);
+					void* resource;
+					(*result) = state_make_resource( env, &resource, resource_type, state_work);
+					assert(NULL != resource);
+					state_work_addref( state_work );
+					lua_pop(lua, 3);
+
+					assert(lua_gettop(lua) == top-1);
+					return 1;
+				}
+
+				// pop the metatable
+				lua_pop(lua, 1);
 			}
 
+			lua_pop( lua, 2);
 			*result = enif_make_atom(env, "unknown_lua_userdata");
+			
+			assert(lua_gettop(lua) == top-1);
 			return 1;
 			break;
 		}
 		case LUA_TLIGHTUSERDATA:
 		{
 			*result = enif_make_atom(env, "lua_lightuserdata_notsupported");
+			assert(lua_gettop(lua) == top-1);
 			return 1;
 			break;
 		}
 		case LUA_TTHREAD:
 		{
 			*result = enif_make_atom(env, "lua_thread_notsupported");
+			assert(lua_gettop(lua) == top-1);
 			return 1;
 			break;
 		}
 		case LUA_TFUNCTION:
 		{
 			*result = enif_make_atom(env, "lua_function_notsupported");
+			assert(lua_gettop(lua) == top-1);
 			return 1;
 			break;
 		}
 	}
+	assert(lua_gettop(lua) == top-1);
 	return 0;
 }
 
-int terminator_toerl(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv* env)
+int terminator_toerl(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv* env, ErlNifResourceType* resource_type)
 {
-	int retval = terminator_toerl_core(lua, result, env);
-	lua_pop(lua, 1);
+	int top = lua_gettop(lua);
+
+	int retval = terminator_toerl_core(lua, result, env, resource_type);
+
+	assert(lua_gettop(lua) == top-retval);
 	return retval;
 }
 
@@ -558,13 +651,62 @@ void* terminator_lua_checkpid(lua_State* lua, int index)
 	return luaL_checkudata(lua, index, TYPE_ERL_PID);
 }
 
-void terminator_create_types(lua_State* lua)
+static int lua_address_gc (lua_State *lua)
 {
-	// create metatable and metatable.__index = metatable
-	int i = 0;
-	for(i = 0; types[i]; i++)
+	int top = lua_gettop(lua);
+	
+	mailbox_address_ptr address = (mailbox_address_ptr) luaL_checkudata(lua, 1, TYPE_LUA_ADDRESS);
+	luaL_argcheck( lua, address, 1, "lua address expected");
+
+	const state_work_ptr state_work = address->state_work;
+	assert(NULL != state_work);
+
+	lua_pushvalue(lua, lua_upvalueindex(1));
+	const state_work_ptr state_work_self = (state_work_ptr) lua_touserdata(lua, -1);
+	lua_pop(lua, 1);
+	assert(NULL != state_work_self);
+
+	if(state_work != state_work_self)
 	{
-		luaL_newmetatable(lua, types[i]);
-		lua_pop(lua, 1);	
+		int refcount = state_work_decref( state_work );
 	}
+
+	assert(lua_gettop(lua) == top);
+
+	return 0;
+}
+
+void terminator_create_types(lua_State* lua, void* state_work)
+{
+	int top = lua_gettop(lua);
+
+	// create metatable and metatable.__index = metatable
+	luaL_newmetatable( lua, TYPE_ERL_PID);
+	lua_pushliteral( lua, "__index");
+	lua_pushvalue( lua, -2);
+	lua_rawset( lua, -3);
+	lua_pop( lua, 1);	
+
+	luaL_newmetatable( lua, TYPE_ERL_REF);
+	lua_pushliteral( lua, "__index");
+	lua_pushvalue( lua, -2);
+	lua_rawset( lua, -3);
+	lua_pop( lua, 1);	
+
+	luaL_newmetatable( lua, TYPE_LUA_ADDRESS);
+	lua_pushliteral( lua, "__index");
+	lua_pushvalue( lua, -2);
+	lua_rawset( lua, -3);
+
+//	lua_pushstring( lua, "class");
+//	lua_pushliteral( lua, TYPE_LUA_ADDRESS);
+	lua_pushliteral( lua, "__gc");
+	lua_pushlightuserdata(lua, state_work);
+	lua_pushcclosure(lua, lua_address_gc, 1);
+	lua_rawset( lua, -3);
+
+	// lua_rawset( lua, -3);
+	lua_pop(lua, 1);
+
+	assert(lua_gettop(lua) == top);
 }

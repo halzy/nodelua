@@ -12,6 +12,7 @@
 #include <lauxlib.h>
 
 #include <string.h>
+#include <assert.h>
 
 
 
@@ -23,6 +24,8 @@ struct erllua
 
   message_queue_ptr messages;
   int do_shutdown;
+  int ref_count;
+  ErlNifRWLock* ref_count_lock;
 };
 
 struct lua_input_script
@@ -32,26 +35,73 @@ struct lua_input_script
   int done;
 };
 
-int erllua_shutting_down(erllua_ptr erllua)
+int erllua_refcount(erllua_ptr erllua)
 {
-  return erllua->do_shutdown;
+  assert(NULL != erllua);
+  enif_rwlock_rlock(erllua->ref_count_lock);
+  long ref_count = erllua->ref_count;
+  enif_rwlock_runlock(erllua->ref_count_lock);
+  return ref_count;
 }
 
-void erllua_shut_down(erllua_ptr erllua, int shutdown)
+int erllua_addref(erllua_ptr erllua)
 {
-  erllua->do_shutdown = shutdown;
+  assert(NULL != erllua);
+  enif_rwlock_rwlock(erllua->ref_count_lock);
+  assert(0 == erllua->do_shutdown);
+  int ref_count = ++(erllua->ref_count);
+  enif_rwlock_rwunlock(erllua->ref_count_lock);
+  return ref_count;
+}
+
+int erllua_decref(erllua_ptr erllua)
+{
+  assert(NULL != erllua);
+  // do not destroy here, the lua instance will get one
+  // last chance to run before it is destroyed.
+  enif_rwlock_rwlock(erllua->ref_count_lock);
+  int ref_count = --(erllua->ref_count);
+  if(0 == ref_count)
+  {
+    erllua->do_shutdown = 1;
+  }
+  enif_rwlock_rwunlock(erllua->ref_count_lock);
+
+  return ref_count;
+}
+
+int erllua_shutting_down(erllua_ptr erllua)
+{
+  assert(NULL != erllua);
+  return erllua->do_shutdown;
 }
 
 int erllua_send_message(erllua_ptr erllua, ERL_NIF_TERM message)
 {
+  assert(NULL != erllua);
   return message_queue_push(erllua->messages, message);
 }
 
-
 void erllua_destroy(erllua_ptr erllua)
 {
+  assert(NULL != erllua);
+
+  // destroy should never be called unless all references 
+  // to the work have been released
+  assert(0 == erllua_refcount(erllua));
+  
   lua_close(erllua->lua);
   destroy_message_queue(erllua->messages);
+  if(NULL != erllua->ref_count_lock)
+  {
+    if(0 != enif_rwlock_tryrwlock(erllua->ref_count_lock))
+    {
+      assert(0);
+    }
+    enif_rwlock_rwunlock(erllua->ref_count_lock);
+
+    enif_rwlock_destroy(erllua->ref_count_lock);
+  }
   memset(erllua, 0, sizeof(struct erllua));
   node_free(erllua);
 }
@@ -59,6 +109,7 @@ void erllua_destroy(erllua_ptr erllua)
 
 ERLLUA_STATE erllua_run(erllua_ptr erllua)
 {
+  assert(NULL != erllua);
   // TODO @@@ if state is error, send back the error on the top
   // of the stack
   if(ERLLUA_ERROR == erllua->state)
@@ -71,6 +122,7 @@ ERLLUA_STATE erllua_run(erllua_ptr erllua)
 
   // swap the message queues, make the incoming the processing one
   message_queue_process_begin(erllua->messages);  
+
   // lua is expected to empty the message queue
   int result = lua_resume(erllua->coroutine, NULL, 0);
 
@@ -129,7 +181,7 @@ static const char *read_input_script(lua_State *env, void *user_data, size_t *si
 }
 
 // returns {ok, handle} and sets erllua_result or {error, {kind, message}} and erllua_result is NULL
-erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, const char* name, ErlNifResourceType* erl_resource_type)
+erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, const char* name, const void* state_work, ErlNifResourceType* erl_resource_type)
 {
   (void) env; // unused
   
@@ -138,8 +190,14 @@ erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, 
     goto error_create;
 
   memset(erllua, 0, sizeof(struct erllua));
+
   erllua->state = ERLLUA_INIT;
   erllua->do_shutdown = 0;
+  erllua->ref_count = 0;
+
+  erllua->ref_count_lock = enif_rwlock_create("erllua ref_count_lock");
+  if(NULL == erllua->ref_count_lock)
+    goto error_create;
 
   // create the message queue
   erllua->messages = create_message_queue();
@@ -182,7 +240,7 @@ erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, 
   }
 
   // add my libs here
-  register_mailbox(erllua->coroutine, erllua, erllua->messages, erl_resource_type);
+  register_mailbox(erllua->coroutine, erllua, erllua->messages, erl_resource_type, (void*)state_work);
 
   return erllua;
 

@@ -1,6 +1,7 @@
 #include "mailbox.h"
 #include "message_queue.h"
 #include "terminator.h"
+#include "state.h"
 
 #include <assert.h>
 
@@ -12,6 +13,7 @@
 static message_queue_ptr get_messages(lua_State* lua)
 {
 	assert(NULL != lua);
+	int top = lua_gettop(lua);
 
 	// stack: -
 	lua_pushvalue(lua, lua_upvalueindex(1));
@@ -22,6 +24,7 @@ static message_queue_ptr get_messages(lua_State* lua)
 	lua_pop(lua, 1);
 
 	assert(NULL != messages);
+	assert(lua_gettop(lua) == top);
 
 	return messages;
 }
@@ -29,6 +32,7 @@ static message_queue_ptr get_messages(lua_State* lua)
 static ErlNifResourceType* get_resource_type(lua_State* lua)
 {
 	assert(NULL != lua);
+	int top = lua_gettop(lua);
 
 	// stack: -
 	lua_pushvalue(lua, lua_upvalueindex(3));
@@ -40,6 +44,7 @@ static ErlNifResourceType* get_resource_type(lua_State* lua)
 
 	assert(NULL != resource_type);
 
+	assert(lua_gettop(lua) == top);
 	return resource_type;
 }
 
@@ -47,6 +52,7 @@ static ErlNifResourceType* get_resource_type(lua_State* lua)
 static erllua_ptr* get_erllua(lua_State* lua)
 {
 	assert(NULL != lua);
+	int top = lua_gettop(lua);
 
 	// stack: -
 	lua_pushvalue(lua, lua_upvalueindex(2));
@@ -58,8 +64,30 @@ static erllua_ptr* get_erllua(lua_State* lua)
 	lua_pop(lua, 1);
 
 	assert(NULL != erllua);
-
+	assert(lua_gettop(lua) == top);
 	return erllua;
+}
+
+
+
+static void* get_state_work(lua_State* lua)
+{
+	assert(NULL != lua);
+	int top = lua_gettop(lua);
+
+	// stack: -
+	lua_pushvalue(lua, lua_upvalueindex(4));
+
+	// stack: userdata(messages)
+	void* state_work = (void*) lua_touserdata(lua, -1);
+	// stack: -
+
+	lua_pop(lua, 1);
+
+	assert(NULL != state_work);
+
+	assert(lua_gettop(lua) == top);
+	return state_work;
 }
 
 
@@ -67,6 +95,7 @@ static erllua_ptr* get_erllua(lua_State* lua)
 static int next_message(lua_State* lua)
 {
 	assert(NULL != lua);
+	int top = lua_gettop(lua);
 
 	// stack: -
 	message_queue_ptr messages = get_messages(lua);
@@ -86,28 +115,31 @@ static int next_message(lua_State* lua)
 	}
 
 	// stack: nil || message
+	assert(lua_gettop(lua) == top+1);
 	return 1;
 }
 
 static int send_message(lua_State* lua)
 {
 	assert(NULL != lua);
+	int top = lua_gettop(lua);
 	
 	// stack: - pid, message
 	message_queue_ptr messages = get_messages( lua );
 
 	// who do we send the message to?
 	ErlNifEnv* env = message_queue_sending_getenv( messages );
-
 	// validate some args
 	terminator_lua_checkpid(lua, 1);
 	luaL_checkany(lua, 2);
 
+	ErlNifResourceType* resource_type = get_resource_type(lua);
+
 	ERL_NIF_TERM message;
-	if(terminator_toerl(lua, &message, env))
+	if(terminator_toerl(lua, &message, env, resource_type))
 	{
 		ERL_NIF_TERM pid_term;
-		if(terminator_toerl(lua, &pid_term, env))
+		if(terminator_toerl(lua, &pid_term, env, resource_type))
 		{
 			ErlNifPid pid;
 			if(enif_get_local_pid(env, pid_term, &pid))
@@ -117,6 +149,8 @@ static int send_message(lua_State* lua)
 		}
 	}
 	enif_clear_env(env);
+
+	assert(lua_gettop(lua) == top - 2);
 
 	return 0;
 }
@@ -124,44 +158,35 @@ static int send_message(lua_State* lua)
 static int shutting_down(lua_State* lua)
 {
 	assert(NULL != lua);
-	
+	int top = lua_gettop(lua);
+
 	// stack: - pid, message
 	erllua_ptr erllua = (erllua_ptr) get_erllua( lua );
 	lua_pushboolean( lua, erllua_shutting_down(erllua));
 
+	assert(lua_gettop(lua) == top+1);
 	return 1;
 }
 
 static int get_address(lua_State* lua)
 {
 	assert(NULL != lua);
-	
-	// stack: - pid, message
-	message_queue_ptr messages = get_messages( lua );
 
-	// who do we send the message to?
-	ErlNifEnv* env = message_queue_sending_getenv( messages );
+	int top = lua_gettop( lua );
 
-	// validate some args
-	terminator_lua_checkpid(lua, 1);
-	luaL_checkany(lua, 2);
-
-	ERL_NIF_TERM message;
-	if(terminator_toerl(lua, &message, env))
+	erllua_ptr erllua = (erllua_ptr) get_erllua( lua );
+	int shutting_down = erllua_shutting_down(erllua);
+	if(shutting_down)
 	{
-		ERL_NIF_TERM pid_term;
-		if(terminator_toerl(lua, &pid_term, env))
-		{
-			ErlNifPid pid;
-			if(enif_get_local_pid(env, pid_term, &pid))
-			{
-				enif_send(NULL, &pid, env, message);
-			}
-		}
+		lua_pushnil( lua );
 	}
-	enif_clear_env(env);
+	else
+	{
+		terminator_tolua_luaaddress( lua, get_state_work( lua ));
+	}
 
-	return 0;
+	assert(lua_gettop(lua) == top+1);
+	return 1;
 }
 
 
@@ -175,21 +200,27 @@ static const struct luaL_Reg mailbox_funcs [] = {
 
 LUALIB_API int luaopen_mailbox(lua_State *lua)
 {
+	int top = lua_gettop(lua);
+	
 	assert(NULL != lua);
 	
-	get_messages(lua);
-	terminator_create_types(lua);
+	void* state_work = get_state_work( lua );
+	assert(NULL != state_work);
+
+	terminator_create_types(lua, state_work);
 
 	luaL_newlibtable(lua, mailbox_funcs);
 
 	lua_pushvalue(lua, lua_upvalueindex(1)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
 	lua_pushvalue(lua, lua_upvalueindex(2)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
 	lua_pushvalue(lua, lua_upvalueindex(3)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushvalue(lua, lua_upvalueindex(4)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
 
 	// setfuncs will take the items between the table and the 
 	// top and make them upvalues for all functions (lua 5.2)
-	luaL_setfuncs(lua, mailbox_funcs, 3); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
-
+	luaL_setfuncs(lua, mailbox_funcs, 4); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
+	
+	assert(lua_gettop(lua) == top+1);
 	return 1;
 }
 
@@ -198,11 +229,13 @@ LUALIB_API int luaopen_mailbox(lua_State *lua)
 LUALIB_API int do_open_mailbox(lua_State *lua)
 {
 	assert(NULL != lua);
+	int top = lua_gettop(lua);
 	
 	lua_pushvalue(lua, lua_upvalueindex(1)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
 	lua_pushvalue(lua, lua_upvalueindex(2)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
 	lua_pushvalue(lua, lua_upvalueindex(3)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
-	lua_pushcclosure(lua, luaopen_mailbox, 3); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushvalue(lua, lua_upvalueindex(4)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushcclosure(lua, luaopen_mailbox, 4); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
 
 	lua_pushliteral(lua, "mailbox"); /* argument to open function */
 	lua_call(lua, 1, 1);  /* open module */
@@ -219,17 +252,19 @@ LUALIB_API int do_open_mailbox(lua_State *lua)
     lua_setfield(lua, -2, "mailbox");	// _G[modname] = module
     lua_pop(lua, 1);  					// remove _G table
 
+	assert(lua_gettop(lua) == top+1);
 	return 1;
 }
 
 
 
-void register_mailbox(lua_State *lua, erllua_ptr erllua, message_queue_ptr message_queue, ErlNifResourceType* erl_resource_type)
+void register_mailbox(lua_State *lua, erllua_ptr erllua, message_queue_ptr message_queue, ErlNifResourceType* erl_resource_type, void* state_work)
 {
 	assert(NULL != lua);
 	assert(NULL != erllua);
 	assert(NULL != message_queue);
 	assert(NULL != erl_resource_type);
+	assert(NULL != state_work);
 	
 	int top = lua_gettop(lua);
 	lua_getfield(lua, LUA_REGISTRYINDEX, "_PRELOAD");
@@ -239,7 +274,8 @@ void register_mailbox(lua_State *lua, erllua_ptr erllua, message_queue_ptr messa
 	lua_pushlightuserdata(lua, message_queue); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
 	lua_pushlightuserdata(lua, erllua); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
 	lua_pushlightuserdata(lua, erl_resource_type); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
-	lua_pushcclosure(lua, do_open_mailbox, 3); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushlightuserdata(lua, state_work); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushcclosure(lua, do_open_mailbox, 4); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
 	lua_settable(lua, registry);
 
 	lua_settop(lua, top);
