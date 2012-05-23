@@ -5,9 +5,10 @@ mailbox.async_id = 0
 mailbox.async_callbacks = {}
 local function sendasync(pid, msg, callback)
 	local callback_id = mailbox.async_id + 1
+	local address = mailbox.address()
 	mailbox.async_id = callback_id
 	mailbox.async_callbacks[callback_id] = callback;
-	mailbox.send(pid, {callback=callback_id, message=msg} )
+	mailbox.send(pid, {sender=address, callback=callback_id, message=msg} )
 end
 mailbox.sendasync = sendasync
 

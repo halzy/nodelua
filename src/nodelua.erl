@@ -47,8 +47,11 @@ send_core(_Ref, _Message) ->
 %% ===================================================================
 -ifdef(TEST).
 
-crash_test() ->
+crash1_test() ->
     [ basic_test() || _ <- lists:seq(1, 100) ].
+
+crash2_test() ->
+    [ translation_test() || _ <- lists:seq(1, 100) ].
 
 basic_test() ->
     {ok, Script} = file:read_file("../test_scripts/basic_test.lua"),
@@ -93,8 +96,8 @@ translation_test() ->
     bounce_message(Ref, "test", [{1.0,116.0}, {2.0,101.0}, {3.0,115.0}, {4.0,116.0}]).
 
 performance_messages(Ref) ->
-    [ send(Ref, X) || X <- lists:seq(1, 100000) ],
-    [ receive Y -> Z = erlang:trunc(Y), ?assertEqual(X, Z) end || X <- lists:seq(1, 10000) ].
+    [ send(Ref, X) || X <- lists:seq(1, 100) ],
+    [ receive Y -> Z = erlang:trunc(Y), ?assertEqual(X, Z) end || X <- lists:seq(1, 100) ].
 performance_test() ->
     {ok, Script} = file:read_file("../test_scripts/performance.lua"),
     {ok, Ref} = run(Script),
@@ -108,7 +111,7 @@ sandbox_echo_process() ->
     receive
         die -> ok;
         Me -> 
-            erlang:display(Me),
+            ?debugVal(Me),
             sandbox_echo_process()
     end.
 
