@@ -10,14 +10,10 @@
 
 /* TODO List:
 
-When sending out messages, send a referenco of the resource as well
-  so that it can be responded to
+Make redis available with the important bits non-configurable:
+  https://github.com/wooga/eredis
 
-Have a different type for the 'address reference' in erlang and lua
-  so that we can GC them and update them separately and transfer them
-
-lua should be able to have functions as callbacks for async functions
-  file.load(name, callback)
+Search for TODO @@@ and fix them!
 
 Send lua error results back to erlang
 
@@ -26,26 +22,9 @@ create a sandbox for running scripts in the main lua script
 
 add the ability to 'require' other scripts in the sandbox
 
-local M = {}
-local function test(n) print(n) end
-function M.test1() test(123) end
-function M.test2() M.test1(); M.test1() end
-return M
-and
-local function foo() end; M.foo = foo
-
-
-add redis client to the sandbox with the important bits non-configurable
-  so that we could host many redis servers and have the different 
-  tennants connect to the different servers securely
-  https://github.com/nrk/redis-lua
-
-
 Interrupt threads that are taking too much time
   may need no move away from using erlang thread API and using posix threads
   pthread_t pthread_self(void)
-
-Remove foo_ptr references, just use the pointers?
 
 socket reference:
   https://bitbucket.org/liamdevine/luasocket_ipv6_lua_51_52/src/538dcef303e2/src/socket_scripts.c
