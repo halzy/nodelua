@@ -8,7 +8,7 @@ local function sendasync(pid, msg, callback)
 	local address = mailbox.address()
 	mailbox.async_id = callback_id
 	mailbox.async_callbacks[callback_id] = callback;
-	mailbox.send(pid, {sender=address, callback=callback_id, message=msg} )
+	mailbox.send(pid, {sender={address, callback_id}, data={message=msg}} )
 end
 mailbox.sendasync = sendasync
 

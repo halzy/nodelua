@@ -4,7 +4,7 @@
 -export([run_core/1, send_core/2]).
 
 -ifdef(TEST).
--export([sandbox_echo_process/0]).
+-export([callback_test_process/1]).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
@@ -34,6 +34,11 @@ send(Lua, Message) ->
 
 load(Lua, Path, Module) ->
     send_core(Lua, [{pid, self()}, {type, load}, {module, Module}, {path, Path}]).
+
+reply(LuaCallback, Response) ->
+    {1.0, Lua} = lists:nth(1, LuaCallback),
+    {2.0, CallbackId} = lists:nth(2, LuaCallback),
+    send_core(Lua, [{pid, self()}, {callback_id, CallbackId}, {type, reply}, {reply, Response}]).
 
 run_core(_Script) ->
     ?nif_stub.
@@ -107,27 +112,23 @@ performance_test() ->
     io_lib:format("~p took ~p to process~n", [Ref, Time]),
     erlang:display(Time).
 
-sandbox_echo_process() ->
+callback_test_process(Pid) ->
     receive
         die -> ok;
-        Me -> 
-            ?debugVal(Me),
-            sandbox_echo_process()
+        Message -> 
+            {_, Sender} = lists:keyfind(<<"sender">>, 1, Message),
+            reply(Sender, [{pid, Pid}]),
+            callback_test_process(Pid)
     end.
 
-sandbox_test() ->
-    %receive
-    %    Data -> erlang:display(Data)
-    %end,
+callback_test() ->
     {ok, Script} = file:read_file("../scripts/main.lua"),
     {ok, Ref} = run(Script),
-    ?assertEqual(ok, load(Ref, <<"../scripts">>, <<"test">>)),
-    EchoPid = spawn(nodelua, sandbox_echo_process, []),
+    ?assertEqual(ok, load(Ref, <<"../scripts">>, <<"callback_test">>)),
+    EchoPid = spawn(nodelua, callback_test_process, [self()]),
     ?assertEqual(ok, send(Ref, [{echo, EchoPid}])),
-    ?assertEqual(ok, send(Ref, [{echo, self()}])),
-    %receive
-    %    Data -> erlang:display("aa"), erlang:display(Data), erlang:display("bb"), EchoPid ! die
-    %end.
-    ok.
+    receive
+        <<"async-test">> -> EchoPid ! die, ok
+    end.
 
 -endif.

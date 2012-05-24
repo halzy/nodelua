@@ -1,5 +1,5 @@
 
-local something = require("something")
+local module_test = require("module_test")
 
 local M = {}
 
@@ -17,13 +17,13 @@ local function dump(o)
 end
 
 local function callback(result) 
-	print("callback" .. dump(result)) 
+	mailbox.send(result.pid, "async-test")
 end
 
 local function update(inbox)
 	for k,v in pairs(inbox) do
 		if v.echo then
-			mailbox.sendasync(v.echo, "echo test", callback)
+			mailbox.sendasync(v.echo, "sending async", callback)
 		end
 	end
 end; M.update = update
