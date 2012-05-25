@@ -1,6 +1,6 @@
 -module(nodelua).
 
--export([run/1, send/2, load/3]).
+-export([run/1, send/2, reply/2, load/3]).
 -export([run_core/1, send_core/2]).
 
 -ifdef(TEST).
