@@ -31,6 +31,7 @@ struct state_work
 struct resource
 {
 	state_work_ptr work;
+	RESOURCE_REF_TYPE ref_type;
 };
 
 struct state
@@ -120,7 +121,7 @@ error_create_work:
 }
 
 
-ERL_NIF_TERM state_make_resource(ErlNifEnv* env, void** resourc, ErlNifResourceType* resource_type, state_work_ptr state_work)
+ERL_NIF_TERM state_make_resource(ErlNifEnv* env, void** resourc, ErlNifResourceType* resource_type, state_work_ptr state_work, RESOURCE_REF_TYPE ref_type)
 {
 	resource_ptr rsrc = enif_alloc_resource(resource_type, sizeof(struct resource));
 	if(NULL == rsrc)
@@ -129,7 +130,7 @@ ERL_NIF_TERM state_make_resource(ErlNifEnv* env, void** resourc, ErlNifResourceT
 	// clear it out
 	memset(rsrc, 0, sizeof(struct resource));
 	rsrc->work = state_work;
-
+	rsrc->ref_type = ref_type;
 
 	ERL_NIF_TERM resource_handle = enif_make_resource(env, rsrc);
 
@@ -164,7 +165,7 @@ ERL_NIF_TERM state_add_script(ErlNifEnv* env, const char * data, size_t size, co
 
 	// assocate the resource type that will be GC'd in erlang
 	resource_ptr resource = NULL;
-	result = state_make_resource(env, (void**)&resource, state->resource_type, work);
+	result = state_make_resource(env, (void**)&resource, state->resource_type, work, STRONG_REF);
 	if(NULL == resource)
 	{
 		goto error_add_script;
@@ -232,13 +233,16 @@ static void resource_gc(ErlNifEnv* env, void* arg)
 
 	resource_ptr resource = (resource_ptr) arg;
 
-	// remove our reference to the work unit
-	int destroy = erllua_decref(resource->work->erllua);
-
-	if(destroy)
+	if(STRONG_REF == resource->ref_type)
 	{
-		state_ptr state = get_state(env);
-		enqueue_work_cas( WORK_WAIT, WORK_ENQUEUED, WORK_REQUEUE, state, resource->work);
+		// remove our reference to the work unit
+		int destroy = erllua_decref(resource->work->erllua);
+
+		if(destroy)
+		{
+			state_ptr state = get_state(env);
+			enqueue_work_cas( WORK_WAIT, WORK_ENQUEUED, WORK_REQUEUE, state, resource->work);
+		}		
 	}
 
 	memset(arg, 0, sizeof(struct resource));

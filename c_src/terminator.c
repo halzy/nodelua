@@ -20,6 +20,7 @@ typedef struct mailbox_address* mailbox_address_ptr;
 struct mailbox_address
 {
 	state_work_ptr state_work;
+	RESOURCE_REF_TYPE ref_type;
 };
 
 #define ERROR_STACK_MESSAGE "Could not grow stack large enough to read message."
@@ -299,10 +300,13 @@ void terminator_tolua_luaaddress(lua_State* lua, void* reference)
 	int top = lua_gettop(lua);
 
 	mailbox_address_ptr address = (mailbox_address_ptr)lua_newuserdata(lua, sizeof(struct mailbox_address));
+	memset(address, 0, sizeof(struct mailbox_address));
+
 	address->state_work = reference;
+	address->ref_type = WEAK_REF;
+
 	luaL_getmetatable(lua, TYPE_LUA_ADDRESS);
 	lua_setmetatable(lua, -2);
-	//state_work_addref( address->state_work );
 
 	assert(lua_gettop(lua) == top+1);
 }
@@ -590,9 +594,8 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 					state_work_ptr state_work = address->state_work;
 					assert(NULL != state_work);
 					void* resource;
-					(*result) = state_make_resource( env, &resource, resource_type, state_work);
+					(*result) = state_make_resource( env, &resource, resource_type, state_work, WEAK_REF);
 					assert(NULL != resource);
-					state_work_addref( state_work );
 					lua_pop(lua, 3);
 
 					assert(lua_gettop(lua) == top-1);
@@ -666,9 +669,9 @@ static int lua_address_gc (lua_State *lua)
 	lua_pop(lua, 1);
 	assert(NULL != state_work_self);
 
-	if(state_work != state_work_self)
+	if(STRONG_REF == address->ref_type)
 	{
-		int refcount = state_work_decref( state_work );
+		state_work_decref( state_work );
 	}
 
 	assert(lua_gettop(lua) == top);
