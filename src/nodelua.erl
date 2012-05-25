@@ -124,7 +124,7 @@ callback_test_process(Pid) ->
 callback_test() ->
     {ok, Script} = file:read_file("../scripts/main.lua"),
     {ok, Ref} = run(Script),
-    ?assertEqual(ok, load(Ref, <<"../test_scripts">>, <<"callback_test">>)),
+    ?assertEqual(ok, load(Ref, [<<"../scripts/libs">>,<<"../test_scripts">>,<<"../test_scripts/callback_test">>], <<"callback_test">>)),
     EchoPid = spawn(nodelua, callback_test_process, [self()]),
     ?assertEqual(ok, send(Ref, [{echo, EchoPid}])),
     receive

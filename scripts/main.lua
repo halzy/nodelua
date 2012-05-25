@@ -22,7 +22,13 @@ function main()
 		table.insert(inbox, message.data) 
 	end
 	function mail_sorter.load(message) 
-		package.path = message.path .. "/" .. message.module .. "/?.lua;" .. message.path .. "/" .. message.module .. "/?/init.lua"
+		local new_path = {}
+		for index, module_path in ipairs(message.path) do
+			table.insert(new_path, module_path .. "/?.lua;" .. module_path .. "/?/init.lua;" .. module_path .. "/?/?.lua")
+		end
+
+		package.cpath = "" -- do not allow for C module loading
+		package.path = table.concat( new_path, ";" )
 
 		local behavior = assert(require(message.module))
 		if( behavior ) then
