@@ -10,6 +10,8 @@
 
 -on_load(init/0).
 
+% This interface is intended to be a simple bridge to lua, no more.
+
 -define(nif_stub, nif_stub_error(?LINE)).
 nif_stub_error(Line) ->
     erlang:nif_error({nif_not_loaded,module,?MODULE,line,Line}).
