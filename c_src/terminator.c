@@ -616,6 +616,7 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 		case LUA_TLIGHTUSERDATA:
 		{
 			*result = enif_make_atom(env, "lua_lightuserdata_notsupported");
+			lua_pop(lua, 1);
 			assert(lua_gettop(lua) == top-1);
 			return 1;
 			break;
@@ -623,6 +624,7 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 		case LUA_TTHREAD:
 		{
 			*result = enif_make_atom(env, "lua_thread_notsupported");
+			lua_pop(lua, 1);
 			assert(lua_gettop(lua) == top-1);
 			return 1;
 			break;
@@ -630,6 +632,7 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 		case LUA_TFUNCTION:
 		{
 			*result = enif_make_atom(env, "lua_function_notsupported");
+			lua_pop(lua, 1);
 			assert(lua_gettop(lua) == top-1);
 			return 1;
 			break;
