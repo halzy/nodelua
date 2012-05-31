@@ -67,12 +67,11 @@ function main()
 		end
 
 		-- run the script if we have one, giving it the messages
-		if( update_function ) then
+		if( update_function and 0 ~= #inbox) then
 			assert(pcall(update_function, inbox))
 		end
 
 		-- somehow let the script send messages
-
 		if( mailbox.shutting_down() ) then
 			if( shutdown_function ) then 
 				shutdown_function()
