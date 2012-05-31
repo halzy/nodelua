@@ -30,8 +30,8 @@ function main()
 		package.cpath = "" -- do not allow for C module loading
 		package.path = table.concat( new_path, ";" )
 
-		local behavior = assert(require(message.module))
-		if( behavior ) then
+		local success, behavior = pcall(require, message.module)
+		if( success ) then
 			if( "function" == type(behavior.update) ) then
 				update_function = behavior.update
 			end
@@ -39,6 +39,13 @@ function main()
 				shutdown_function = behavior.shutdown
 			end
 		end
+
+		local response = {token=message.token}
+		if( not success ) then
+			response["error"] = behavior
+		end
+
+		mailbox.send(message.pid, response)
 	end
 	function mail_sorter.reply(message)
 		local callback_id = message.callback_id
