@@ -1,6 +1,6 @@
 require "mailbox"
 
-function dump(o)
+local function dump(o)
 	if type(o) == 'table' then
 		local s = '{ '
 		for k,v in pairs(o) do
@@ -15,11 +15,9 @@ end
 
 function main()
 	while true do
-		-- print("incoming")
 		while true do
 			local message = mailbox.next()
 			if message == nil then break end
-			-- print(dump(message))
 			if 'table' == type(message) then
 				local pid = message["pid"]
 				local msg = message.data
