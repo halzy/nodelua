@@ -49,18 +49,26 @@ static ERL_NIF_TERM nodelua_load_core(ErlNifEnv* env, int argc, const ERL_NIF_TE
 {
   ERL_NIF_TERM result;
 
-  if(1 != argc)
+  if(2 != argc)
   {
     return enif_make_badarg(env);
   }
 
   const ERL_NIF_TERM script = argv[0];
+  const ERL_NIF_TERM owner_term = argv[1];
+
+  ErlNifPid owner_pid;
+  if(!enif_get_local_pid( env, owner_term, &owner_pid))
+  {
+    return enif_make_badarg(env);
+  }
+
   ErlNifBinary binary;
 
   if(enif_inspect_iolist_as_binary(env, script, &binary))
   {
     // allocate our lua type
-    result = state_add_script(env, (const char *)binary.data, binary.size, "script");
+    result = state_add_script(env, owner_pid, (const char *)binary.data, binary.size, "script");
   }
   else
   {

@@ -86,7 +86,7 @@ static void destroy_work(void* data)
 	node_free(work);
 }
 
-static state_work_ptr create_work(ErlNifEnv* env, const char * data, size_t size, const char * name, ErlNifResourceType* resource_type)
+static state_work_ptr create_work(ErlNifEnv* env, ErlNifPid owner_pid, const char * data, size_t size, const char * name, ErlNifResourceType* resource_type)
 {
 	// allocate the actual work unit, this is pointed to by the resource
 	// and we will know that all references have been removed from this
@@ -105,7 +105,7 @@ static state_work_ptr create_work(ErlNifEnv* env, const char * data, size_t size
 
 	// put a new erllua into it. If there is a script error we will find out
 	// later when a thread processes the script
-	work->erllua = erllua_create(env, data, size, name, (void*) work, resource_type); 
+	work->erllua = erllua_create(env, owner_pid, data, size, name, (void*) work, resource_type); 
 	if(NULL == work->erllua)
 		goto error_create_work;
 
@@ -151,12 +151,12 @@ error_make_resource:
 }
 
 
-ERL_NIF_TERM state_add_script(ErlNifEnv* env, const char * data, size_t size, const char * name)
+ERL_NIF_TERM state_add_script(ErlNifEnv* env, ErlNifPid owner_pid, const char * data, size_t size, const char * name)
 {
 	state_ptr state = get_state(env);
 
 	ERL_NIF_TERM result;
-	state_work_ptr work = create_work(env, data, size, name, state->resource_type);
+	state_work_ptr work = create_work(env, owner_pid, data, size, name, state->resource_type);
 	if(NULL == work)
 	{
 		result = make_error_tuple(env, ATOM_MEMORY, "error creating work unit");

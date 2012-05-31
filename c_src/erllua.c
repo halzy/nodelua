@@ -26,6 +26,8 @@ struct erllua
   int do_shutdown;
   int ref_count;
   ErlNifRWLock* ref_count_lock;
+
+  ErlNifPid owner_pid;
 };
 
 struct lua_input_script
@@ -74,6 +76,12 @@ int erllua_shutting_down(erllua_ptr erllua)
 {
   assert(NULL != erllua);
   return erllua->do_shutdown;
+}
+
+ErlNifPid erllua_owner_pid(erllua_ptr erllua)
+{
+  assert(NULL != erllua);
+  return erllua->owner_pid;
 }
 
 int erllua_send_message(erllua_ptr erllua, ERL_NIF_TERM message)
@@ -181,7 +189,7 @@ static const char *read_input_script(lua_State *env, void *user_data, size_t *si
 }
 
 // returns {ok, handle} and sets erllua_result or {error, {kind, message}} and erllua_result is NULL
-erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, const char* name, const void* state_work, ErlNifResourceType* erl_resource_type)
+erllua_ptr erllua_create(ErlNifEnv* env, ErlNifPid owner_pid, const char* data, const unsigned size, const char* name, const void* state_work, ErlNifResourceType* erl_resource_type)
 {
   (void) env; // unused
   
@@ -194,6 +202,7 @@ erllua_ptr erllua_create(ErlNifEnv* env, const char* data, const unsigned size, 
   erllua->state = ERLLUA_INIT;
   erllua->do_shutdown = 0;
   erllua->ref_count = 0;
+  erllua->owner_pid = owner_pid;
 
   erllua->ref_count_lock = enif_rwlock_create("erllua ref_count_lock");
   if(NULL == erllua->ref_count_lock)

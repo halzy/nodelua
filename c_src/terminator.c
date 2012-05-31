@@ -300,6 +300,24 @@ static void push_nif_pid(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env)
 	assert(lua_gettop(lua) == top+1);
 }
 
+
+void terminator_tolua_erlpid(lua_State* lua, ErlNifPid erlpid)
+{
+	const int top = lua_gettop( lua );
+
+	ErlNifPid *pid = (ErlNifPid *)lua_newuserdata(lua, sizeof(ErlNifPid));
+	assert(NULL != pid);
+
+	memset(pid, 0, sizeof(ErlNifPid));
+	*pid = erlpid;
+
+	luaL_getmetatable(lua, TYPE_ERL_PID);
+	lua_setmetatable(lua, -2);
+
+	assert(lua_gettop( lua ) == top+1);
+}
+
+
 void terminator_tolua_luaaddress(lua_State* lua, void* reference)
 {
 	assert(NULL != lua);
