@@ -10,10 +10,14 @@
 
 /* TODO List:
 
+Bind the erllua instance (think trap_exit) to the lua.erl instance.
+
 Make redis available with the important bits non-configurable:
   https://github.com/wooga/eredis
 
 Search for TODO @@@ and fix them!
+
+If someone sends a message to a lua instance that has gone away, what should happen?
 
 Send lua error results back to erlang
 
@@ -21,6 +25,10 @@ create a sandbox for running scripts in the main lua script
   http://lua-users.org/wiki/LuaModuleFunctionCritiqued
 
 add the ability to 'require' other scripts in the sandbox
+
+Experiment with using binaries to move socket data arround in lua in order 
+  to translate faster. 
+Experimest with using bson binaries in erlang and lua.
 
 Interrupt threads that are taking too much time
   may need no move away from using erlang thread API and using posix threads
