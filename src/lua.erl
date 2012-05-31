@@ -7,7 +7,7 @@
 %% ------------------------------------------------------------------
 
 -export([start_link/1]).
--export([load/3, send/2, reply/2]).
+-export([require/3, send/2, reply/2]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -39,9 +39,9 @@ send(Pid, Message) ->
 	ok = gen_server:cast(Pid, {send, self(), CallToken, Message}),
 	{ok, CallToken}.
 
--spec load(pid(), [binary()], binary()) -> ok.
-load(Pid, Path, Module) ->
-	gen_server:call(Pid, {load, Path, Module}).
+-spec require(pid(), [binary()], binary()) -> ok.
+require(Pid, Path, Module) ->
+	gen_server:call(Pid, {require, Path, Module}).
 
 reply(LuaCallback, Response) ->
     {1.0, Lua} = lists:nth(1, LuaCallback),
@@ -57,9 +57,9 @@ init([{script, LuaScript}]) ->
     {ok, LuaReference} = nodelua:load(Script, self()),
     {ok, #state{nodelua=LuaReference}}.
 
-handle_call({load, Path, Module}, _From, State) ->
+handle_call({require, Path, Module}, _From, State) ->
 	CallToken = erlang:make_ref(),
-    nodelua:send( State#state.nodelua, [{type, load}, {pid, self()}, {token, CallToken}, {path, Path}, {module, Module}]),
+    nodelua:send( State#state.nodelua, [{type, require}, {pid, self()}, {token, CallToken}, {path, Path}, {module, Module}]),
     receive
     	[{<<"token">>,CallToken},{<<"error">>,Message}] ->
     		{reply, {error, Message}, State};
@@ -105,13 +105,13 @@ main_test_() ->
 		fun setup/0,
 		fun cleanup/1,
 		[
-			fun run_load_error/1,
+			fun run_require_error/1,
 			fun run_callback/1
 		]
 	}.
 
-run_load_error(Pid) ->
-	{error, Error} = lua:load(Pid, [<<"../test_scripts">>], <<"require_error">>),
+run_require_error(Pid) ->
+	{error, Error} = lua:require(Pid, [<<"../test_scripts">>], <<"require_error">>),
     ?_assertEqual( <<"error loading module 'require_error' from file '../test_scripts/require_error.lua':\n\t../test_scripts/require_error.lua:4: '=' expected near '!'">>, Error ).	
 
 callback_test_process(Pid) ->
@@ -123,7 +123,7 @@ callback_test_process(Pid) ->
             callback_test_process(Pid)
     end.
 run_callback(LuaPid) ->
-	ok = lua:load(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>,<<"../test_scripts/callback_test">>], <<"callback_test">>),
+	ok = lua:require(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>,<<"../test_scripts/callback_test">>], <<"callback_test">>),
     EchoPid = spawn(?MODULE, callback_test_process, [self()]),
 	{ok, _} = lua:send(LuaPid, [{echo, EchoPid}]),
     Result = receive

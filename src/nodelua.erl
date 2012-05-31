@@ -105,4 +105,14 @@ performance_test() ->
     % garbage collected half way through processing
     io_lib:format("~p processed~n", [Ref]).
 
+owner_pid_test() ->
+    MyPid = self(),
+    {ok, Script} = file:read_file("../test_scripts/owner_pid.lua"),
+    {ok, Ref} = load(Script, MyPid),
+    send(Ref, ok),
+    receive
+        Data -> ?assertEqual(MyPid, Data)
+    end.
+
+
 -endif.

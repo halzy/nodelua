@@ -21,7 +21,7 @@ function main()
 	function mail_sorter.mail(message) 
 		table.insert(inbox, message.data) 
 	end
-	function mail_sorter.load(message) 
+	function mail_sorter.require(message) 
 		local new_path = {}
 		for index, module_path in ipairs(message.path) do
 			table.insert(new_path, module_path .. "/?.lua;" .. module_path .. "/?/init.lua;" .. module_path .. "/?/?.lua")
