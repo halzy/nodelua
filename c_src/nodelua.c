@@ -35,17 +35,17 @@ module ref:
 */
 
 // Prototypes
-static ERL_NIF_TERM nodelua_run_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+static ERL_NIF_TERM nodelua_load_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 static ERL_NIF_TERM nodelua_send_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 
 static ErlNifFunc nif_funcs[] =
 {
-    {"run_core", 1, nodelua_run_core},
+    {"load_core", 2, nodelua_load_core},
     {"send_core", 2, nodelua_send_core}
 };
 
 // returns {ok, resource} or {error, {kind, message}}
-static ERL_NIF_TERM nodelua_run_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+static ERL_NIF_TERM nodelua_load_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   ERL_NIF_TERM result;
 

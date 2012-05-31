@@ -54,7 +54,7 @@ reply(LuaCallback, Response) ->
 
 init([{script, LuaScript}]) ->
 	{ok, Script} = file:read_file(LuaScript),
-    {ok, LuaReference} = nodelua:run(Script),
+    {ok, LuaReference} = nodelua:load(Script, self()),
     {ok, #state{nodelua=LuaReference}}.
 
 handle_call({load, Path, Module}, _From, State) ->

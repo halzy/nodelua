@@ -1,7 +1,7 @@
 -module(nodelua).
 
--export([run/1, send/2]).
--export([run_core/1, send_core/2]).
+-export([load/2, send/2]).
+-export([load_core/2, send_core/2]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -27,13 +27,13 @@ init() ->
     NumProcessors = erlang:system_info(logical_processors),
     erlang:load_nif(filename:join(PrivDir, ?MODULE), NumProcessors).
 
-run(Script) ->
-    run_core(Script).
+load(Script, OwnerPid) ->
+    load_core(Script, OwnerPid).
 
 send(Lua, Message) ->
     send_core(Lua, Message).
 
-run_core(_Script) ->
+load_core(_Script, _OwnerPid) ->
     ?nif_stub.
 
 send_core(_Ref, _Message) ->
@@ -50,7 +50,7 @@ crash1_test() ->
 
 basic_test() ->
     {ok, Script} = file:read_file("../test_scripts/basic_test.lua"),
-    {ok, Ref} = run(Script),
+    {ok, Ref} = load(Script, self()),
     ?assertEqual(ok, send(Ref, ok)).
 
 bounce_message(Ref, Message) ->
@@ -62,7 +62,7 @@ bounce_message(Ref, Message) ->
 
 translation_test_() ->
     {ok, Script} = file:read_file("../test_scripts/incoming_message.lua"),
-    {ok, Ref} = run(Script),
+    {ok, Ref} = load(Script, self()),
     MakeRefValue = erlang:make_ref(), % this may not work if the erlang environment is cleared
     [
         ?_assert(bounce_message(Ref, ok) =:= <<"ok">>),
@@ -99,7 +99,7 @@ performance_messages(Ref) ->
     [ receive Y -> Z = erlang:trunc(Y), ?assertEqual(X, Z) end || X <- lists:seq(1, 10000) ].
 performance_test() ->
     {ok, Script} = file:read_file("../test_scripts/performance.lua"),
-    {ok, Ref} = run(Script),
+    {ok, Ref} = load(Script, self()),
     ?debugTime("performance_test", timer:tc(fun performance_messages/1, [Ref])),
     % have to keep a referenco to Ref otherwise it will be
     % garbage collected half way through processing
