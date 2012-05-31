@@ -1,10 +1,9 @@
 -module(nodelua).
 
--export([run/1, send/2, reply/2, load/3]).
+-export([run/1, send/2]).
 -export([run_core/1, send_core/2]).
 
 -ifdef(TEST).
--export([callback_test_process/1]).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
@@ -32,15 +31,7 @@ run(Script) ->
     run_core(Script).
 
 send(Lua, Message) ->
-    send_core(Lua, [{pid, self()}, {type, mail}, {data, Message}]).
-
-load(Lua, Path, Module) ->
-    send_core(Lua, [{pid, self()}, {type, load}, {module, Module}, {path, Path}]).
-
-reply(LuaCallback, Response) ->
-    {1.0, Lua} = lists:nth(1, LuaCallback),
-    {2.0, CallbackId} = lists:nth(2, LuaCallback),
-    send_core(Lua, [{pid, self()}, {callback_id, CallbackId}, {type, reply}, {reply, Response}]).
+    send_core(Lua, Message).
 
 run_core(_Script) ->
     ?nif_stub.
@@ -63,7 +54,7 @@ basic_test() ->
     ?assertEqual(ok, send(Ref, ok)).
 
 bounce_message(Ref, Message) ->
-    send(Ref, Message),
+    send(Ref, { {data, Message}, {pid, self()} }),
     receive 
         Response -> 
             Response
@@ -103,8 +94,9 @@ translation_test_() ->
     .
 
 performance_messages(Ref) ->
-    [ send(Ref, X) || X <- lists:seq(1, 100) ],
-    [ receive Y -> Z = erlang:trunc(Y), ?assertEqual(X, Z) end || X <- lists:seq(1, 100) ].
+    PidTuple = {pid, self()},
+    [ send(Ref, { {data, X}, PidTuple }) || X <- lists:seq(1, 10000) ],
+    [ receive Y -> Z = erlang:trunc(Y), ?assertEqual(X, Z) end || X <- lists:seq(1, 10000) ].
 performance_test() ->
     {ok, Script} = file:read_file("../test_scripts/performance.lua"),
     {ok, Ref} = run(Script),
@@ -112,24 +104,5 @@ performance_test() ->
     % have to keep a referenco to Ref otherwise it will be
     % garbage collected half way through processing
     io_lib:format("~p processed~n", [Ref]).
-
-callback_test_process(Pid) ->
-    receive
-        die -> ok;
-        Message -> 
-            {_, Sender} = lists:keyfind(<<"sender">>, 1, Message),
-            reply(Sender, [{pid, Pid}]),
-            callback_test_process(Pid)
-    end.
-
-callback_test() ->
-    {ok, Script} = file:read_file("../scripts/main.lua"),
-    {ok, Ref} = run(Script),
-    ?assertEqual(ok, load(Ref, [<<"../scripts/libs">>,<<"../test_scripts">>,<<"../test_scripts/callback_test">>], <<"callback_test">>)),
-    EchoPid = spawn(nodelua, callback_test_process, [self()]),
-    ?assertEqual(ok, send(Ref, [{echo, EchoPid}])),
-    receive
-        <<"async-test">> -> EchoPid ! die, ok
-    end.
 
 -endif.
