@@ -1,7 +1,15 @@
-all:
-	./rebar compile && ./rebar skip_deps=true eunit
+
+REBAR=./rebar
+all: deps compile test
+deps:
+	@$(REBAR) get-deps
+compile:
+	@$(REBAR) compile
+test:
+	@$(REBAR) skip_deps=true eunit
 clean:
-	./rebar clean
+	@$(REBAR) clean
+
 
 # USE_GDB=true
 # export DYLD_INSERT_LIBRARIES=/usr/lib/libgmalloc.dylib
