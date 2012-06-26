@@ -22,7 +22,8 @@
 -endif.
 
 -record(state, {
-	nodelua :: reference()
+	nodelua :: reference(),
+    owner :: pid()
 }).
 
 %% ------------------------------------------------------------------
@@ -31,7 +32,7 @@
 
 -spec start_link(nonempty_string()) -> {ok, pid()}.
 start_link(LuaScript) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [{script, LuaScript}], []).
+    gen_server:start_link({local, ?SERVER}, ?MODULE, [{script, LuaScript}, {owner, self()}], []).
 
 -spec send(pid(), term()) -> {ok, reference()} | {error, string()}.
 send(Pid, Message) ->
@@ -52,10 +53,10 @@ reply(LuaCallback, Response) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init([{script, LuaScript}]) ->
+init([{script, LuaScript}, {owner, Owner}]) ->
 	{ok, Script} = file:read_file(LuaScript),
     {ok, LuaReference} = nodelua:load(Script, self()),
-    {ok, #state{nodelua=LuaReference}}.
+    {ok, #state{nodelua=LuaReference, owner=Owner}}.
 
 handle_call({require, Path, Module}, _From, State) ->
 	CallToken = erlang:make_ref(),
@@ -76,7 +77,8 @@ handle_cast({send, _From, CallToken, Message}, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info(_Info, State) ->
+handle_info(Info, State) ->
+    State#state.owner ! Info,
     {noreply, State}.
 
 terminate(_Reason, _State) ->
