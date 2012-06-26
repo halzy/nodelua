@@ -49,6 +49,7 @@ reply(LuaCallback, Response) ->
     {2.0, CallbackId} = lists:nth(2, LuaCallback),
     nodelua:send(Lua, [{type, reply}, {pid, self()}, {callback_id, CallbackId}, {reply, Response}]).
 
+
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
@@ -110,7 +111,8 @@ code_change(_OldVsn, State, _Extra) ->
 -ifdef(TEST).
 
 setup() -> 
-    {ok,Pid} = lua:start_link("../scripts/main.lua"), Pid.
+    {ok,Pid} = lua:start_link("../scripts/main.lua"), 
+    Pid.
     
 cleanup(Pid) ->
     gen_server:call(Pid, stop).
@@ -121,8 +123,7 @@ main_test_() ->
 		fun cleanup/1,
 		[
 			fun run_require_error/1,
-			fun run_callback/1
-		]
+			fun run_callback/1		]
 	}.
 
 run_require_error(Pid) ->
@@ -137,6 +138,7 @@ callback_test_process(Pid) ->
             lua:reply(Sender, [{pid, Pid}]),
             callback_test_process(Pid)
     end.
+
 run_callback(LuaPid) ->
 	ok = lua:require(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>,<<"../test_scripts/callback_test">>], <<"callback_test">>),
     EchoPid = spawn(?MODULE, callback_test_process, [self()]),
@@ -146,11 +148,5 @@ run_callback(LuaPid) ->
     end,
     EchoPid ! die,
     ?_assertEqual( <<"async-test">>, Result).
-
-% socket_server_testX() ->
-%     {ok, Script} = file:read_file("../scripts/main.lua"),
-%     {ok, Ref} = run(Script),
-%     ?assertEqual(ok, load(Ref, [<<"../scripts/libs">>,<<"../test_scripts">>], <<"socket_server_test">>)),
-%     ok.
 
 -endif.
