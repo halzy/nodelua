@@ -77,6 +77,19 @@ handle_cast({send, _From, CallToken, Message}, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
+handle_info([{1.0, <<"invoke">>},{2.0,Data},{3.0,Args}], State) ->
+	LuaBin = <<"lua_">>,
+	LuaModule = << LuaBin/binary, Data/binary >>,
+	Registered = [ erlang:atom_to_binary(Reg, latin1) || Reg <- erlang:registered() ],
+	IsModule = lists:member(LuaModule, Registered),
+	case IsModule of
+		true ->
+			Module = binary_to_existing_atom(LuaModule, latin1),
+			erlang:apply(Module, lua_call, [Args]);
+		false ->
+			ok
+	end,
+	{noreply, State};
 handle_info(Info, State) ->
     State#state.owner ! Info,
     {noreply, State}.

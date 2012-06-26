@@ -56,6 +56,16 @@ function main()
 		callback(reply);
 	end
 
+	local function register_type(name, callback)
+		local message_type = "type_" .. name
+		if mail_sorter[message_type] then
+			return false
+		end
+		mail_sorter[message_type] = callback
+		return true
+	end
+	mailbox.register_type = register_type
+
 	while true do
 		inbox = {}
 		while true do
