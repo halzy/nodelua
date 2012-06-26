@@ -70,12 +70,14 @@ handle_call({require, Path, Module}, _From, State) ->
     end;
 handle_call(stop, _From, State) -> 
     {stop, normal, ok, State};
-handle_call(_Request, _From, State) ->
-    {reply, ok, State}.
+handle_call(Request, _From, State) ->
+    lager:error("lua_module:handle_call(~p) called!", [Request]),
+    {reply, undefined, State}.
 handle_cast({send, _From, CallToken, Message}, State) ->
 	nodelua:send( State#state.nodelua, [{type, mail}, {pid, self()}, {token, CallToken}, {data, Message}]),
 	{noreply, State};
-handle_cast(_Msg, State) ->
+handle_cast(Msg, State) ->
+    lager:error("lua_module:handle_cast(~p) called!", [Msg]),
     {noreply, State}.
 
 handle_info([{1.0, <<"invoke">>},{2.0,Data},{3.0,Args}], State) ->
@@ -123,8 +125,17 @@ main_test_() ->
 		fun cleanup/1,
 		[
 			fun run_require_error/1,
-			fun run_callback/1		]
+			fun run_callback/1,
+            fun run_bogus_call/1,
+            fun run_bogus_cast/1
+        ]
 	}.
+
+run_bogus_call(Pid) ->
+    ?_assertEqual(gen_server:call(Pid, bla), undefined).
+
+run_bogus_cast(Pid) ->
+    ?_assertEqual(gen_server:cast(Pid, bla), ok).
 
 run_require_error(Pid) ->
 	{error, Error} = lua:require(Pid, [<<"../test_scripts">>], <<"require_error">>),
@@ -148,5 +159,10 @@ run_callback(LuaPid) ->
     end,
     EchoPid ! die,
     ?_assertEqual( <<"async-test">>, Result).
+
+test_unsupported_test_() ->
+    [
+        ?_assertEqual(code_change(bla, state, bla), {ok, state})
+    ].
 
 -endif.
