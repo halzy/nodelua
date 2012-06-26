@@ -2,10 +2,13 @@
  [{description, "Embedded Lua for Erlang"},
   {vsn, "1.0"},
   {registered, []},
-  {applications, [compiler,kernel,stdlib]},
+  {applications, [compiler,kernel,stdlib,cowboy]},
   {mod, { nodelua, []}},
   {modules, [
+            lua,
+            lua_module,
+            lua_socket_server,
+            lua_ws_handler,
             nodelua
   ]},
   {env, []}]}.
-

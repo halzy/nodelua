@@ -4,3 +4,4 @@
 *.so
 ebin/*
 .eunit/*
+deps

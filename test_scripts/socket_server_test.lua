@@ -2,8 +2,6 @@
 
 local socket_server = require("socket_server")
 
-local server = socket_server.new();
-
 local M = {}
 
 local function dump(o)
@@ -26,8 +24,20 @@ local function update(inbox)
 end; M.update = update
 
 local function shutdown()
-	printf("socket test shutting down")
+	print("socket test shutting down")
 end; M.shutdown = shutdown
 
-return M
+local function on_init( socket )
+	mailbox.send(mailbox.parent(), "on_init")
+end
+local function on_data( socket, data )
+	socket_server.send( socket, "goodbye")
+	mailbox.send(mailbox.parent(), "on_data")
+end
+local function on_terminate( socket )
+	mailbox.send(mailbox.parent(), "on_terminate")
+end
 
+local server = socket_server.new(8080, on_init, on_data, on_terminate);
+
+return M
