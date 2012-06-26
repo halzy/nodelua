@@ -168,7 +168,7 @@ static int shutting_down(lua_State* lua)
 	return 1;
 }
 
-static int get_address(lua_State* lua)
+static int get_self(lua_State* lua)
 {
 	assert(NULL != lua);
 
@@ -190,15 +190,15 @@ static int get_address(lua_State* lua)
 }
 
 
-static int get_owner_address(lua_State* lua)
+static int get_parent(lua_State* lua)
 {
 	assert(NULL != lua);
 
 	int top = lua_gettop( lua );
 
 	erllua_ptr erllua = (erllua_ptr) get_erllua( lua );
-	ErlNifPid owner_pid = erllua_owner_pid(erllua);
-	terminator_tolua_erlpid( lua, owner_pid );
+	ErlNifPid parent_pid = erllua_parent_pid(erllua);
+	terminator_tolua_erlpid( lua, parent_pid );
 
 	assert(lua_gettop(lua) == top+1);
 	return 1;
@@ -208,8 +208,8 @@ static int get_owner_address(lua_State* lua)
 static const struct luaL_Reg mailbox_funcs [] = {
 	{"next", next_message},
 	{"send", send_message},
-	{"address", get_address},
-	{"parent", get_owner_address},
+	{"self", get_self},
+	{"parent", get_parent},
 	{"shutting_down", shutting_down},
 	{NULL, NULL}
 };

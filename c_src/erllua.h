@@ -20,7 +20,7 @@ ERLLUA_STATE erllua_run(erllua_ptr erllua);
 int erllua_send_message(erllua_ptr erllua, ERL_NIF_TERM message);
 
 int erllua_shutting_down(erllua_ptr erllua);
-ErlNifPid erllua_owner_pid(erllua_ptr erllua);
+ErlNifPid erllua_parent_pid(erllua_ptr erllua);
 
 int erllua_refcount(erllua_ptr erllua);
 int erllua_addref(erllua_ptr erllua);
