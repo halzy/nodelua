@@ -10,6 +10,13 @@
 
 /* TODO List:
 
+Since it is easier to lean on the websocket implementation in cowboy I have started
+  using it for the sockets. The socket API should better reflect this, it should be
+  able to handle paths and know more about the requests that come in.
+
+Give the lua scripts the ability to set up a cowboy (erl) socket server and
+  register a callback function.
+
 Bind the erllua instance (think trap_exit) to the lua.erl instance.
 
 Make redis available with the important bits non-configurable:
