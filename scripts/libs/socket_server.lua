@@ -30,9 +30,13 @@ local function new(port, on_init, on_data, on_terminate)
 	mailbox.send(mailbox.parent(), {"invoke",module_name,{command="new",args={lua=mailbox.self(), port=8080}}})
 end; M.new = new;
 
-local function send(socket, message)
-	mailbox.send(socket, message)
-end; M.send = send;
+local function send_text(socket, message)
+	mailbox.send(socket, {text=message})
+end; M.send_text = send_text;
+
+local function send_binary(socket, message)
+	mailbox.send(socket, {bin=message})
+end; M.send_binary = send_binary;
 
 local function update(message)
 	local event = message.event

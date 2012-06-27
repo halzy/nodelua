@@ -28,16 +28,17 @@ websocket_handle({text, Data}, Req, State) ->
 websocket_handle({binary, Data}, Req, State) ->
 	ReqSend = send_lua(data, Data, Req, State),
 	{ok, ReqSend, State};
-websocket_handle(_Data, Req, State) ->
-    {ok, Req, State}.
+websocket_handle({ping, _Data}, Req, State) ->
+	{ok, Req, State};
+websocket_handle({pong, _Data}, Req, State) ->
+	{ok, Req, State}.
 
-websocket_info(Msg, Req, State) when is_binary(Msg) ->
+websocket_info([{<<"bin">>, Msg}], Req, State) ->
 	{reply, {binary, Msg}, Req, State};
-websocket_info(Msg, Req, State) when is_list(Msg) ->
+websocket_info([{<<"text">>, Msg}], Req, State) ->
     {reply, {text, Msg}, Req, State};
 websocket_info(Msg, Req, State) ->
-	erlang:display("websocket_info():"),
-	erlang:display(Msg),
+	lager:error("lua_ws_handler:websocket_info(~p) called!", [Msg]),
     {ok, Req, State}.
 
 websocket_terminate(_Reason, Req, State) ->

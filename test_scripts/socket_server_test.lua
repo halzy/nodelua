@@ -29,9 +29,14 @@ end; M.shutdown = shutdown
 
 local function on_init( socket )
 	mailbox.send(mailbox.parent(), "on_init")
+	mailbox.send(socket, "testing bogus message sending")
 end
 local function on_data( socket, data )
-	socket_server.send( socket, "goodbye")
+	if "Helln" == data then
+		socket_server.send_binary( socket, "goodbye")
+	elseif "HellW" == data then
+		socket_server.send_text( socket, "goodbye")
+	end
 	mailbox.send(mailbox.parent(), "on_data")
 end
 local function on_terminate( socket )
