@@ -7,7 +7,7 @@
   {modules, [
             lua,
             lua_module,
-            lua_socket_server,
+            lua_websocket_server,
             lua_ws_handler,
             nodelua
   ]},

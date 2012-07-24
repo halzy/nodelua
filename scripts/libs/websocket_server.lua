@@ -2,7 +2,7 @@
 require "mailbox"
 
 local M = {}
-local module_name = "socket_server"
+local module_name = "websocket_server"
 
 M.on_init_callbacks = {}
 M.on_data_callbacks = {}
@@ -17,7 +17,7 @@ end; M.delete = delete;
 
 local function new(port, on_init, on_data, on_terminate)
 	if on_init == nil or on_data == nil or on_terminate == nil then
-		error("socket_server.new does not accept nil callbacks")
+		error("websocket_server.new does not accept nil callbacks")
 	end
 	if M.on_data_callbacks[port] then
 		delete(port)

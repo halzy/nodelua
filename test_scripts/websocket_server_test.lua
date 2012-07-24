@@ -1,6 +1,6 @@
 
 
-local socket_server = require("socket_server")
+local websocket_server = require("websocket_server")
 
 local M = {}
 
@@ -18,7 +18,7 @@ local function dump(o)
 end
 
 local function update(inbox)
-	print("socket_server_test:update(): " .. dump(inbox));
+	print("websocket_server_test:update(): " .. dump(inbox));
 	for k,v in pairs(inbox) do
 	end
 end; M.update = update
@@ -33,9 +33,9 @@ local function on_init( socket )
 end
 local function on_data( socket, data )
 	if "Helln" == data then
-		socket_server.send_binary( socket, "goodbye")
+		websocket_server.send_binary( socket, "goodbye")
 	elseif "HellW" == data then
-		socket_server.send_text( socket, "goodbye")
+		websocket_server.send_text( socket, "goodbye")
 	end
 	mailbox.send(mailbox.parent(), "on_data")
 end
@@ -43,6 +43,6 @@ local function on_terminate( socket )
 	mailbox.send(mailbox.parent(), "on_terminate")
 end
 
-local server = socket_server.new(8080, on_init, on_data, on_terminate);
+local server = websocket_server.new(8080, on_init, on_data, on_terminate);
 
 return M

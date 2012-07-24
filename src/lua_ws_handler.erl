@@ -9,7 +9,7 @@
 
 send_lua(Event, Data, Req1, State) ->
 	{Port, Req2} = cowboy_http_req:port(Req1),
-	Message = [{type, type_socket_server}, {socket, self()}, {port, Port}, {event, Event}, {data, Data}],
+	Message = [{type, type_websocket_server}, {socket, self()}, {port, Port}, {event, Event}, {data, Data}],
 	nodelua:send(State#state.lua, Message),
 	Req2.
 

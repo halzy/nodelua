@@ -1,4 +1,4 @@
--module(lua_socket_server).
+-module(lua_websocket_server).
 -behaviour(gen_server).
 -behaviour(lua_module).
 -define(SERVER, ?MODULE).
@@ -39,7 +39,7 @@ lua_call(Message) ->
 
 -spec make_cowboy_id(non_neg_integer()) -> list().
 make_cowboy_id(Port) -> 
-    lists:flatten(["socket_server_",erlang:integer_to_list(Port)]).
+    lists:flatten(["websocket_server_",erlang:integer_to_list(Port)]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
@@ -52,7 +52,7 @@ init(_Args) ->
 handle_call(stop, _From, State) -> 
     {stop, normal, ok, State};
 handle_call(Request, _From, State) ->
-    lager:error("lua_socket_server:handle_call(~p) called!", [Request]),
+    lager:error("lua_websocket_server:handle_call(~p) called!", [Request]),
     {reply, undefined, State}.
 
 handle_cast({<<"new">>, Args}, State) ->
@@ -74,11 +74,11 @@ handle_cast({<<"new">>, Args}, State) ->
 
     {noreply, State};
 handle_cast(Msg, State) ->
-    lager:error("lua_socket_server:handle_cast(~p) called!", [Msg]),
+    lager:error("lua_websocket_server:handle_cast(~p) called!", [Msg]),
     {noreply, State}.
 
 handle_info(Info, State) ->
-    lager:error("lua_socket_server:handle_info(~p) called!", [Info]),
+    lager:error("lua_websocket_server:handle_info(~p) called!", [Info]),
     {noreply, State}.
 
 terminate(_Reason, _State) ->
@@ -105,7 +105,7 @@ main_test_() ->
 		fun setup/0,
 		fun cleanup/1,
 		[
-			fun socket_server/1
+			fun websocket_server/1
 		]
 	}.
 
@@ -118,9 +118,9 @@ make_ws_request(Host, Port, Path) ->
     "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" ++
     "Sec-WebSocket-Version: 13\r\n\r\n".
 
-socket_server(LuaPid) ->
-	{ok, ServerPid} = lua_socket_server:start_link(),
-	ok = lua:require(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>], <<"socket_server_test">>),
+websocket_server(LuaPid) ->
+	{ok, ServerPid} = lua_websocket_server:start_link(),
+	ok = lua:require(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>], <<"websocket_server_test">>),
 	gen_server:call(ServerPid, stop),
 
     {ok, Socket} = gen_tcp:connect("127.0.0.1", 8080, [binary, {active, false}]),
@@ -166,12 +166,12 @@ socket_server(LuaPid) ->
 
 make_cowboy_id_test_() ->
     [
-        ?_assertEqual("socket_server_8080", make_cowboy_id(8080)),
-        ?_assertEqual("socket_server_80", make_cowboy_id(80))
+        ?_assertEqual("websocket_server_8080", make_cowboy_id(8080)),
+        ?_assertEqual("websocket_server_80", make_cowboy_id(80))
     ].
 
 test_unsupported_test_() ->
-    {ok, ServerPid} = lua_socket_server:start_link(),
+    {ok, ServerPid} = lua_websocket_server:start_link(),
     ServerPid ! bla,
     [
         ?_assertEqual(gen_server:call(ServerPid, bla), undefined),
