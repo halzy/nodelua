@@ -4,11 +4,6 @@
   {registered, []},
   {applications, [compiler,kernel,stdlib,cowboy]},
   {mod, { nodelua, []}},
-  {modules, [
-            lua,
-            lua_module,
-            lua_websocket_server,
-            lua_ws_handler,
-            nodelua
-  ]},
-  {env, []}]}.
+  {modules, []},
+  {env, []}]
+}.
