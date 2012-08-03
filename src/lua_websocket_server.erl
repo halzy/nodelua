@@ -121,7 +121,6 @@ make_ws_request(Host, Port, Path) ->
 websocket_server(LuaPid) ->
 	{ok, ServerPid} = lua_websocket_server:start_link(),
 	ok = lua:require(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>], <<"websocket_server_test">>),
-	gen_server:call(ServerPid, stop),
 
     {ok, Socket} = gen_tcp:connect("127.0.0.1", 8080, [binary, {active, false}]),
     Request = make_ws_request("localhost", 8080, "/"),
@@ -161,6 +160,8 @@ websocket_server(LuaPid) ->
     <<"on_terminate">> = receive
         OnTerminate -> OnTerminate
     end,
+
+    gen_server:call(ServerPid, stop),
 
     ?_assertEqual(ok, ok).
 

@@ -45,8 +45,8 @@ require(Pid, Path, Module) ->
 	gen_server:call(Pid, {require, Path, Module}).
 
 reply(LuaCallback, Response) ->
-    {1.0, Lua} = lists:nth(1, LuaCallback),
-    {2.0, CallbackId} = lists:nth(2, LuaCallback),
+    Lua = lists:nth(1, LuaCallback),
+    CallbackId = lists:nth(2, LuaCallback),
     nodelua:send(Lua, [{type, reply}, {pid, self()}, {callback_id, CallbackId}, {reply, Response}]).
 
 
@@ -63,9 +63,10 @@ handle_call({require, Path, Module}, _From, State) ->
 	CallToken = erlang:make_ref(),
     nodelua:send( State#state.nodelua, [{type, require}, {pid, self()}, {token, CallToken}, {path, Path}, {module, Module}]),
     receive
-    	[{<<"token">>,CallToken},{<<"error">>,Message}] ->
+    	[CallToken,[{<<"error">>,Message}]] ->
+            lager:warning("Script Error:~n~p~n", [binary_to_list(Message)]),
     		{reply, {error, Message}, State};
-    	[{<<"token">>,CallToken}] -> 
+    	[CallToken] -> 
     		{reply, ok, State}
     end;
 handle_call(stop, _From, State) -> 
@@ -80,9 +81,9 @@ handle_cast(Msg, State) ->
     lager:error("lua_module:handle_cast(~p) called!", [Msg]),
     {noreply, State}.
 
-handle_info([{1.0, <<"invoke">>},{2.0,Data},{3.0,Args}], State) ->
-	LuaBin = <<"lua_">>,
-	LuaModule = << LuaBin/binary, Data/binary >>,
+handle_info([<<"invoke">>,ModuleName,Args], State) ->
+	ModulePrefix = <<"lua_">>,
+	LuaModule = << ModulePrefix/binary, ModuleName/binary >>,
 	Registered = [ erlang:atom_to_binary(Reg, latin1) || Reg <- erlang:registered() ],
 	IsModule = lists:member(LuaModule, Registered),
 	case IsModule of
@@ -138,13 +139,13 @@ run_bogus_cast(Pid) ->
     ?_assertEqual(gen_server:cast(Pid, bla), ok).
 
 run_require_error(Pid) ->
-	{error, Error} = lua:require(Pid, [<<"../test_scripts">>], <<"require_error">>),
-    ?_assertEqual( <<"error loading module 'require_error' from file '../test_scripts/require_error.lua':\n\t../test_scripts/require_error.lua:4: '=' expected near '!'">>, Error ).	
+	{error, <<Error:5/binary, _Message/binary>>} = lua:require(Pid, [<<"../test_scripts">>], <<"require_error">>),
+    ?_assertEqual( <<"error">>, Error ).	
 
 callback_test_process(Pid) ->
     receive
         die -> ok;
-        Message -> 
+        Message ->
             {_, Sender} = lists:keyfind(<<"sender">>, 1, Message),
             lua:reply(Sender, [{pid, Pid}]),
             callback_test_process(Pid)

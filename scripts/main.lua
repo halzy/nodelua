@@ -41,9 +41,9 @@ function main()
 			end
 		end
 
-		local response = {token=message.token}
+		local response = {message.token}
 		if( not success ) then
-			response["error"] = behavior
+			table.insert(response, {error=behavior})
 		end
 
 		mailbox.send(message.pid, response)
