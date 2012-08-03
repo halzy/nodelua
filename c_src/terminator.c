@@ -11,6 +11,7 @@
 
 #include <string.h>
 #include <assert.h>
+#include <math.h>
 
 #define TYPE_ERL_PID "mailbox.id"
 #define TYPE_ERL_REF "nodelua.terminator.ref"
@@ -33,6 +34,43 @@ struct erlref
 #define ERROR_STACK_MESSAGE "Could not grow stack large enough to read message."
 
 static void push_nif_term(lua_State* lua, ERL_NIF_TERM message, ErlNifEnv* env, ErlNifResourceType* resource_type);
+
+int is_int32(lua_Number number)
+{
+	return isfinite(number) && (number) == (int)(number);
+}
+
+int is_int64(lua_Number number)
+{
+	return isfinite(number) && (number) == (int64_t)(number);
+}
+
+int lua_is_array(lua_State *lua) {
+    int top = lua_gettop(lua);
+
+    long keycount = 0;
+    int maxkey = 0;
+
+    lua_pushnil(lua);
+    while(lua_next(lua,-2)) 
+    {
+        ++keycount;
+		lua_Number number;
+        lua_pop(lua,1); // pop the value
+
+        int type = lua_type(lua, -1);
+        if( (type != LUA_TNUMBER) || 0 >= (number = lua_tonumber(lua, -1)) || !is_int32(number) )
+        {
+			lua_settop(lua, top);
+			return 0;
+		}
+	    maxkey = (number > maxkey ? number : maxkey);
+    }
+
+    lua_settop(lua, top);
+    return maxkey == keycount;
+}
+
 
 // checks to see if the tuple is something we would put as a KV pair in a lua table
 // puts the key(0) and value(1) in the array
@@ -493,7 +531,16 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 		case LUA_TNUMBER:
 		{
 			const lua_Number number = luaL_checknumber(lua, top);
-			*result = enif_make_double(env, (double)number);
+
+			if(is_int64(number))
+			{
+				*result = enif_make_int64(env, (int64_t)number);
+			}
+			else
+			{
+				*result = enif_make_double(env, (double)number);
+			}
+
 			lua_pop( lua, 1);
 			assert(lua_gettop(lua) == top-1);
 			return 1;
@@ -540,6 +587,8 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 		{
 			size_t table_size = 0;
 
+			int is_array = lua_is_array(lua);
+
 			// table is at the top of the stack
 			lua_pushnil(lua);  // nil as the first key
 			while (lua_next(lua, top) != 0) {
@@ -555,18 +604,29 @@ static int terminator_toerl_core(lua_State* lua, ERL_NIF_TERM *result, ErlNifEnv
 
 			// table is at the top of the stack
 			lua_pushnil(lua);  // nil as the first key
-			while (lua_next(lua, top) != 0) {
+			while (lua_next(lua, top) != 0) 
+			{
 				// uses 'key' (at index -2) and 'value' (at index -1)
+				if(is_array)
+				{
+					// remove 'value', keeps 'key' for next iteration
+					ERL_NIF_TERM value;
+					terminator_toerl_core(lua, &value, env, resource_type);
+					*next_cell = value;
+				}
+				else
+				{					
+					// remove 'value', keeps 'key' for next iteration
+					ERL_NIF_TERM tuple_value;
+					terminator_toerl_core(lua, &tuple_value, env, resource_type);
 
-				// remove 'value', keeps 'key' for next iteration
-				ERL_NIF_TERM tuple_value;
-				terminator_toerl_core(lua, &tuple_value, env, resource_type);
+					ERL_NIF_TERM tuple_key;
+					lua_pushvalue( lua, -1);
+					terminator_toerl_core(lua, &tuple_key, env, resource_type);
 
-				ERL_NIF_TERM tuple_key;
-				lua_pushvalue( lua, -1);
-				terminator_toerl_core(lua, &tuple_key, env, resource_type);
+					*next_cell = enif_make_tuple2(env, tuple_key, tuple_value);
+				}				
 
-				*next_cell = enif_make_tuple2(env, tuple_key, tuple_value);
 				next_cell++;
 			}
 
