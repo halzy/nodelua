@@ -1,6 +1,6 @@
--module(lua_websocket_server).
+-module(nlua_websocket_server).
 -behaviour(gen_server).
--behaviour(lua_module).
+-behaviour(nlua_module).
 -define(SERVER, ?MODULE).
 
 -ifdef(TEST).
@@ -63,7 +63,7 @@ handle_cast({<<"new">>, Args}, State) ->
 
     Dispatch = [
         %% {Host, list({Path, Handler, Opts})}
-        {'_', [{'_', lua_ws_handler, [{lua, Lua}]}]}
+        {'_', [{'_', nlua_ws_handler, [{lua, Lua}]}]}
     ],
 
     %% Name, NbAcceptors, Transport, TransOpts, Protocol, ProtoOpts
@@ -94,7 +94,7 @@ code_change(_OldVsn, State, _Extra) ->
 -ifdef(TEST).
 
 setup() -> 
-    {ok,Pid} = lua:start_link("../scripts/main.lua"), 
+    {ok,Pid} = nodelua:start_link("../scripts/main.lua"), 
     Pid.
     
 cleanup(Pid) ->
@@ -119,8 +119,8 @@ make_ws_request(Host, Port, Path) ->
     "Sec-WebSocket-Version: 13\r\n\r\n".
 
 websocket_server(LuaPid) ->
-	{ok, ServerPid} = lua_websocket_server:start_link(),
-	ok = lua:require(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>], <<"websocket_server_test">>),
+	{ok, ServerPid} = nlua_websocket_server:start_link(),
+	ok = nodelua:require(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>], <<"websocket_server_test">>),
 
     {ok, Socket} = gen_tcp:connect("127.0.0.1", 8080, [binary, {active, false}]),
     Request = make_ws_request("localhost", 8080, "/"),
@@ -172,7 +172,7 @@ make_cowboy_id_test_() ->
     ].
 
 test_unsupported_test_() ->
-    {ok, ServerPid} = lua_websocket_server:start_link(),
+    {ok, ServerPid} = nlua_websocket_server:start_link(),
     ServerPid ! bla,
     [
         ?_assertEqual(gen_server:call(ServerPid, bla), undefined),

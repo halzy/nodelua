@@ -50,17 +50,17 @@ module ref:
 */
 
 // Prototypes
-static ERL_NIF_TERM nodelua_load_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
-static ERL_NIF_TERM nodelua_send_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+static ERL_NIF_TERM nlua_load_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+static ERL_NIF_TERM nlua_send_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 
 static ErlNifFunc nif_funcs[] =
 {
-    {"load_core", 2, nodelua_load_core},
-    {"send_core", 2, nodelua_send_core}
+    {"load_core", 2, nlua_load_core},
+    {"send_core", 2, nlua_send_core}
 };
 
 // returns {ok, resource} or {error, {kind, message}}
-static ERL_NIF_TERM nodelua_load_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+static ERL_NIF_TERM nlua_load_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   ERL_NIF_TERM result;
 
@@ -93,7 +93,7 @@ static ERL_NIF_TERM nodelua_load_core(ErlNifEnv* env, int argc, const ERL_NIF_TE
   return result;
 }
 
-static ERL_NIF_TERM nodelua_send_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+static ERL_NIF_TERM nlua_send_core(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   ERL_NIF_TERM result;
 
@@ -148,4 +148,4 @@ static void on_unload(ErlNifEnv* env, void* priv_data)
   state_destroy(env);
 }
 
-ERL_NIF_INIT(nodelua, nif_funcs, on_load, NULL, NULL, on_unload);
+ERL_NIF_INIT(nlua, nif_funcs, on_load, NULL, NULL, on_unload);

@@ -1,129 +1,169 @@
 -module(nodelua).
+-behaviour(gen_server).
+-define(SERVER, ?MODULE).
 
--export([start/2]).
--export([load/2, send/2]).
--export([load_core/2, send_core/2]).
+%% ------------------------------------------------------------------
+%% API Function Exports
+%% ------------------------------------------------------------------
+
+-export([start_link/1]).
+-export([require/3, send/2, reply/2]).
+
+%% ------------------------------------------------------------------
+%% gen_server Function Exports
+%% ------------------------------------------------------------------
+
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2,
+         terminate/2, code_change/3]).
 
 -ifdef(TEST).
+-export([callback_test_process/1]).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--on_load(init/0).
+-record(state, {
+	lua :: reference(),
+    owner :: pid()
+}).
 
-% This interface is intended to be a simple bridge to lua, no more.
-start(_StartType, _StartArgs) ->
-    Script = config(script, undefined),
-    {ok, Pid} = lua:start_link(Script), 
-    {ok, Pid, []}.
+%% ------------------------------------------------------------------
+%% API Function Definitions
+%% ------------------------------------------------------------------
 
-config(Name, Default) ->
-    case application:get_env(?MODULE, Name) of
-        {ok, Value} -> Value;
-        undefined -> Default
-    end.
+-spec start_link(nonempty_string()) -> {ok, pid()}.
+start_link(LuaScript) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, [{script, LuaScript}, {owner, self()}], []).
 
--define(nif_stub, nif_stub_error(?LINE)).
-nif_stub_error(Line) ->
-    erlang:nif_error({nif_not_loaded,module,?MODULE,line,Line}).
+-spec send(pid(), term()) -> {ok, reference()} | {error, string()}.
+send(Pid, Message) ->
+	CallToken = erlang:make_ref(),
+	ok = gen_server:cast(Pid, {send, self(), CallToken, Message}),
+	{ok, CallToken}.
 
-init() ->
-  PrivDir = case code:priv_dir(?MODULE) of
-                {error, bad_name} ->
-                    EbinDir = filename:dirname(code:which(?MODULE)),
-                    AppPath = filename:dirname(EbinDir),
-                    filename:join(AppPath, "priv");
-                Path ->
-                    Path
-            end,
-    NumProcessors = erlang:system_info(logical_processors),
-    erlang:load_nif(filename:join(PrivDir, ?MODULE), NumProcessors).
+-spec require(pid(), [binary()], binary()) -> ok.
+require(Pid, Path, Module) ->
+	gen_server:call(Pid, {require, Path, Module}).
 
-load(Script, OwnerPid) ->
-    load_core(Script, OwnerPid).
+reply(LuaCallback, Response) ->
+    Lua = lists:nth(1, LuaCallback),
+    CallbackId = lists:nth(2, LuaCallback),
+    nlua:send(Lua, [{type, reply}, {pid, self()}, {callback_id, CallbackId}, {reply, Response}]).
 
-send(Lua, Message) ->
-    send_core(Lua, Message).
 
-load_core(_Script, _OwnerPid) ->
-    ?nif_stub.
+%% ------------------------------------------------------------------
+%% gen_server Function Definitions
+%% ------------------------------------------------------------------
 
-send_core(_Ref, _Message) ->
-    ?nif_stub.
+init([{script, LuaScript}, {owner, Owner}]) ->
+	{ok, Script} = file:read_file(LuaScript),
+    {ok, LuaReference} = nlua:load(Script, self()),
+    {ok, #state{lua=LuaReference, owner=Owner}}.
 
+handle_call({require, Path, Module}, _From, State) ->
+	CallToken = erlang:make_ref(),
+    nlua:send( State#state.lua, [{type, require}, {pid, self()}, {token, CallToken}, {path, Path}, {module, Module}]),
+    receive
+    	[CallToken,[{<<"error">>,Message}]] ->
+            lager:warning("Script Error:~n~p~n", [binary_to_list(Message)]),
+    		{reply, {error, Message}, State};
+    	[CallToken] -> 
+    		{reply, ok, State}
+    end;
+handle_call(stop, _From, State) -> 
+    {stop, normal, ok, State};
+handle_call(Request, _From, State) ->
+    lager:error("lua_module:handle_call(~p) called!", [Request]),
+    {reply, undefined, State}.
+handle_cast({send, _From, CallToken, Message}, State) ->
+	nlua:send( State#state.lua, [{type, mail}, {pid, self()}, {token, CallToken}, {data, Message}]),
+	{noreply, State};
+handle_cast(Msg, State) ->
+    lager:error("lua_module:handle_cast(~p) called!", [Msg]),
+    {noreply, State}.
+
+handle_info([<<"invoke">>,ModuleName,Args], State) ->
+	ModulePrefix = <<"nlua_">>,
+	LuaModule = << ModulePrefix/binary, ModuleName/binary >>,
+	Registered = [ erlang:atom_to_binary(Reg, latin1) || Reg <- erlang:registered() ],
+	IsModule = lists:member(LuaModule, Registered),
+	case IsModule of
+		true ->
+			Module = binary_to_existing_atom(LuaModule, latin1),
+			erlang:apply(Module, lua_call, [Args]);
+		false ->
+			ok
+	end,
+	{noreply, State};
+handle_info(Info, State) ->
+    State#state.owner ! Info,
+    {noreply, State}.
+
+terminate(_Reason, _State) ->
+    ok.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
+
+%% ------------------------------------------------------------------
+%% Internal Function Definitions
+%% ------------------------------------------------------------------
 
 %% ===================================================================
 %% EUnit tests
 %% ===================================================================
 -ifdef(TEST).
 
-crash1_test() ->
-    [ basic_test() || _ <- lists:seq(1, 100) ].
+setup() -> 
+    {ok,Pid} = ?MODULE:start_link("../scripts/main.lua"), 
+    Pid.
+    
+cleanup(Pid) ->
+    gen_server:call(Pid, stop).
 
-basic_test() ->
-    {ok, Script} = file:read_file("../test_scripts/basic_test.lua"),
-    {ok, Ref} = load(Script, self()),
-    ?assertEqual(ok, send(Ref, ok)).
+main_test_() ->
+    {foreach,
+		fun setup/0,
+		fun cleanup/1,
+		[
+			fun run_require_error/1,
+			fun run_callback/1,
+            fun run_bogus_call/1,
+            fun run_bogus_cast/1
+        ]
+	}.
 
-bounce_message(Ref, Message) ->
-    send(Ref, { {data, Message}, {pid, self()} }),
-    receive 
-        Response -> 
-            Response
-    end.
+run_bogus_call(Pid) ->
+    ?_assertEqual(gen_server:call(Pid, bla), undefined).
 
-translation_test_() ->
-    {ok, Script} = file:read_file("../test_scripts/incoming_message.lua"),
-    {ok, Ref} = load(Script, self()),
-    MakeRefValue = erlang:make_ref(), % this may not work if the erlang environment is cleared
-    [
-        ?_assertEqual(bounce_message(Ref, ok), <<"ok">>),
-        ?_assertEqual(bounce_message(Ref, <<"mkay">>), <<"mkay">>),
-        ?_assertEqual(bounce_message(Ref, []), []),
-        ?_assertEqual(bounce_message(Ref, 2), 2),
-        ?_assertEqual(bounce_message(Ref, -2), -2),
-        ?_assertEqual(bounce_message(Ref, -0.2), -0.2),
-        ?_assertEqual(bounce_message(Ref, 0.2), 0.2),
-        ?_assertEqual(bounce_message(Ref, fun(A) -> A end), <<"sending a function reference is not supported">>),
-        ?_assertEqual(bounce_message(Ref, MakeRefValue), MakeRefValue),
-        ?_assertEqual(bounce_message(Ref, Ref), Ref),
-        ?_assertEqual(bounce_message(Ref, [ok]), [<<"ok">>]),
-        ?_assertEqual(bounce_message(Ref, true), true),
-        ?_assertEqual(bounce_message(Ref, false), false),
-        ?_assertEqual(bounce_message(Ref, nil), nil),
-        ?_assertEqual(bounce_message(Ref, [{1, <<"ok">>}]), [<<"ok">>]),
-        ?_assertEqual(bounce_message(Ref, [{3, 3}, {2, 2}, one, four, five]), [<<"one">>, 2, 3, <<"four">>, <<"five">>]),
-        ?_assertEqual(bounce_message(Ref, {{3, 3}, {2, 2}, one, four, five}), [<<"one">>, 2, 3, <<"four">>, <<"five">>]),
-        ?_assertEqual(bounce_message(Ref, [first, {1, <<"ok">>}]), [<<"ok">>,<<"first">>]),
-        ?_assertEqual(bounce_message(Ref, {}), []),
-        ?_assertEqual(bounce_message(Ref, [{ok, ok}]), [{<<"ok">>,<<"ok">>}]),
-        % instead of clobbering KvP with matching K, append them as a list, not awesome, but doesn't lose data
-        ?_assertEqual(lists:keysort(1, bounce_message(Ref, [{ok, ok}, {ok, notok}])), [{1,[<<"ok">>,<<"notok">>]},{<<"ok">>,<<"ok">>}]),
-        ?_assertEqual(lists:keysort(1, bounce_message(Ref, [{one, ok}, {two, ok}])), [{<<"one">>,<<"ok">>},{<<"two">>,<<"ok">>}]),
-        % strings are lists and get treated as such
-        ?_assertEqual(bounce_message(Ref, "test"), [116, 101, 115, 116])
-    ]
-    .
+run_bogus_cast(Pid) ->
+    ?_assertEqual(gen_server:cast(Pid, bla), ok).
 
-performance_messages(Ref) ->
-    PidTuple = {pid, self()},
-    [ send(Ref, { {data, X}, PidTuple }) || X <- lists:seq(1, 10000) ],
-    [ receive Y -> Z = erlang:trunc(Y), ?assertEqual(X, Z) end || X <- lists:seq(1, 10000) ].
-performance_test() ->
-    {ok, Script} = file:read_file("../test_scripts/performance.lua"),
-    {ok, Ref} = load(Script, self()),
-    ?debugTime("performance_test", timer:tc(fun performance_messages/1, [Ref])),
-    % have to keep a referenco to Ref otherwise it will be
-    % garbage collected half way through processing
-    io_lib:format("~p processed~n", [Ref]).
+run_require_error(Pid) ->
+	{error, <<Error:5/binary, _Message/binary>>} = require(Pid, [<<"../test_scripts">>], <<"require_error">>),
+    ?_assertEqual( <<"error">>, Error ).	
 
-owner_pid_test() ->
-    MyPid = self(),
-    {ok, Script} = file:read_file("../test_scripts/owner_pid.lua"),
-    {ok, Ref} = load(Script, MyPid),
-    send(Ref, ok),
+callback_test_process(Pid) ->
     receive
-        Data -> ?assertEqual(MyPid, Data)
+        die -> ok;
+        Message ->
+            {_, Sender} = lists:keyfind(<<"sender">>, 1, Message),
+            ?MODULE:reply(Sender, [{pid, Pid}]),
+            callback_test_process(Pid)
     end.
 
+run_callback(LuaPid) ->
+	ok = ?MODULE:require(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>,<<"../test_scripts/callback_test">>], <<"callback_test">>),
+    EchoPid = spawn(?MODULE, callback_test_process, [self()]),
+	{ok, _} = ?MODULE:send(LuaPid, [{echo, EchoPid}]),
+    Result = receive
+       Data -> Data
+    end,
+    EchoPid ! die,
+    ?_assertEqual( <<"async-test">>, Result).
+
+test_unsupported_test_() ->
+    [
+        ?_assertEqual(code_change(bla, state, bla), {ok, state})
+    ].
 
 -endif.

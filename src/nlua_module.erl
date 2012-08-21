@@ -1,4 +1,4 @@
--module(lua_module).
+-module(nlua_module).
 
 -export([behaviour_info/1]).
 
