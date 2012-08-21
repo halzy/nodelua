@@ -1,6 +1,5 @@
 -module(nlua).
 
--export([start/2]).
 -export([load/2, send/2]).
 -export([load_core/2, send_core/2]).
 
@@ -9,18 +8,6 @@
 -endif.
 
 -on_load(init/0).
-
-% This interface is intended to be a simple bridge to lua, no more.
-start(_StartType, _StartArgs) ->
-    Script = config(script, undefined),
-    {ok, Pid} = nodelua:start_link(Script), 
-    {ok, Pid, []}.
-
-config(Name, Default) ->
-    case application:get_env(?MODULE, Name) of
-        {ok, Value} -> Value;
-        undefined -> Default
-    end.
 
 -define(nif_stub, nif_stub_error(?LINE)).
 nif_stub_error(Line) ->
