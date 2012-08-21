@@ -6,8 +6,9 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1]).
+-export([start_script/2, stop_script/1]).
 -export([require/3, send/2, reply/2]).
+-export([start_link/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -30,9 +31,24 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
+-spec start_script(any(), nonempty_string()) -> {ok, pid()}.
+start_script(Ref, LuaScript) ->
+    supervisor:start_child(nodelua_sup, 
+        {{?MODULE, Ref}, {?MODULE, start_link, [LuaScript]}, 
+            permanent, 5000, worker, [?MODULE]}).
+
+-spec stop_script(any()) -> ok | {error, not_found}.
+stop_script(Ref) ->
+    case supervisor:terminate_child(nodelua_sup, {?MODULE, Ref}) of
+        ok ->
+            supervisor:delete_child(nodelua_sup, {?MODULE, Ref});
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
 -spec start_link(nonempty_string()) -> {ok, pid()}.
 start_link(LuaScript) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [{script, LuaScript}, {owner, self()}], []).
+    gen_server:start_link(?MODULE, [{script, LuaScript}, {owner, self()}], []).
 
 -spec send(pid(), term()) -> {ok, reference()} | {error, string()}.
 send(Pid, Message) ->
@@ -48,7 +64,6 @@ reply(LuaCallback, Response) ->
     Lua = lists:nth(1, LuaCallback),
     CallbackId = lists:nth(2, LuaCallback),
     nlua:send(Lua, [{type, reply}, {pid, self()}, {callback_id, CallbackId}, {reply, Response}]).
-
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
@@ -74,6 +89,8 @@ handle_call(stop, _From, State) ->
 handle_call(Request, _From, State) ->
     lager:error("lua_module:handle_call(~p) called!", [Request]),
     {reply, undefined, State}.
+
+
 handle_cast({send, _From, CallToken, Message}, State) ->
 	nlua:send( State#state.lua, [{type, mail}, {pid, self()}, {token, CallToken}, {data, Message}]),
 	{noreply, State};
@@ -114,11 +131,12 @@ code_change(_OldVsn, State, _Extra) ->
 -ifdef(TEST).
 
 setup() -> 
-    {ok,Pid} = ?MODULE:start_link("../scripts/main.lua"), 
+    nodelua_app:start(),
+    {ok,Pid} = ?MODULE:start_script(test, "../scripts/main.lua"),
     Pid.
     
-cleanup(Pid) ->
-    gen_server:call(Pid, stop).
+cleanup(_Pid) ->
+    ?MODULE:stop_script(test).
 
 main_test_() ->
     {foreach,

@@ -1,9 +1,9 @@
 {application, nodelua,
  [{description, "Embedded Lua for Erlang"},
   {vsn, git},
-  {registered, []},
+  {registered, [ nodelua_sup ]},
   {applications, [compiler,kernel,stdlib,cowboy]},
-  {mod, { nodelua, []}},
+  {mod, { nodelua_app, []}},
   {modules, []},
   {env, []}]
 }.
