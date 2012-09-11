@@ -26,6 +26,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
+-export([start/0]).
 -export([start_script/2, stop_script/1]).
 -export([require/3, send/2, reply/2]).
 -export([start_link/1]).
@@ -50,6 +51,18 @@
 %% ------------------------------------------------------------------
 %% API Function Definitions
 %% ------------------------------------------------------------------
+
+start() -> start(nodelua).
+start(App) ->
+    start_ok(App, application:start(App, permanent)).
+start_ok(_App, ok) -> ok;
+start_ok(_App, {error, {already_started, _App}}) -> ok;
+start_ok(App, {error, {not_started, Dep}}) -> 
+    ok = start(Dep),
+    start(App);
+start_ok(App, {error, Reason}) -> 
+    erlang:error({app_start_failed, App, Reason}).
+
 
 -spec start_script(any(), nonempty_string()) -> {ok, pid()}.
 start_script(Ref, LuaScript) ->
@@ -107,7 +120,7 @@ handle_call({require, Path, Module}, _From, State) ->
 handle_call(stop, _From, State) -> 
     {stop, normal, ok, State};
 handle_call(Request, _From, State) ->
-    lager:error("lua_module:handle_call(~p) called!", [Request]),
+    lager:error("nodelua:handle_call(~p) called!", [Request]),
     {reply, undefined, State}.
 
 
@@ -115,7 +128,7 @@ handle_cast({send, _From, CallToken, Message}, State) ->
 	nlua:send( State#state.lua, [{type, mail}, {pid, self()}, {token, CallToken}, {data, Message}]),
 	{noreply, State};
 handle_cast(Msg, State) ->
-    lager:error("lua_module:handle_cast(~p) called!", [Msg]),
+    lager:error("nodelua:handle_cast(~p) called!", [Msg]),
     {noreply, State}.
 
 handle_info([<<"invoke">>,ModuleName,Args], State) ->
@@ -151,7 +164,7 @@ code_change(_OldVsn, State, _Extra) ->
 -ifdef(TEST).
 
 setup() -> 
-    nodelua_app:start(),
+    ?MODULE:start(),
     {ok,Pid} = ?MODULE:start_script(test, "../scripts/main.lua"),
     Pid.
     
