@@ -2,7 +2,7 @@
  [{description, "Embedded Lua for Erlang"},
   {vsn, git},
   {registered, [ nodelua_sup ]},
-  {applications, [compiler,kernel,stdlib,cowboy]},
+  {applications, [compiler,kernel,stdlib,ranch,cowboy]},
   {mod, { nodelua_app, []}},
   {modules, []},
   {env, []}]
