@@ -1,5 +1,7 @@
 
 REBAR=./rebar
+.PHONY: all deps compile clean test xref
+
 all: deps compile test
 deps:
 	@$(REBAR) get-deps
@@ -10,6 +12,8 @@ test:
 clean:
 	@$(REBAR) clean
 
+xref:
+	@$(REBAR) xref skip_deps=true
 
 # USE_GDB=true
 # export DYLD_INSERT_LIBRARIES=/usr/lib/libgmalloc.dylib
