@@ -164,10 +164,21 @@ static int on_load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
   return (NULL == *priv_data) ? 1 : 0;
 }
 
+static int on_upgrade(ErlNifEnv* env, void** priv_data, void** old_priv_data, ERL_NIF_TERM load_info)
+{
+  (void)env; // unused
+  (void)load_info; // unused
+  
+  // we use the old private data as before
+  *priv_data = *old_priv_data;
+  return 0;
+}
+
+
 static void on_unload(ErlNifEnv* env, void* priv_data)
 {
   (void) priv_data; // unused - the state type/data is hidden in env
   state_destroy(env);
 }
 
-ERL_NIF_INIT(nlua, nif_funcs, on_load, NULL, NULL, on_unload);
+ERL_NIF_INIT(nlua, nif_funcs, on_load, NULL, on_upgrade, on_unload);
