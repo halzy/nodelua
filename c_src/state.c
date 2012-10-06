@@ -382,7 +382,6 @@ static void* thread_main(void* state_ref)
 		}
     }
 
-    printf("goodbye!\n");
     enif_thread_exit(NULL);
 
     return NULL;
