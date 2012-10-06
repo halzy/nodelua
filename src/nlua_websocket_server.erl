@@ -87,9 +87,9 @@ handle_cast({<<"new">>, Args}, State) ->
     ],
 
     %% Name, NbAcceptors, Transport, TransOpts, Protocol, ProtoOpts
-    {ok, _CowboyPid} = cowboy:start_listener(CowboyID, 128,
-        cowboy_tcp_transport, [{port, Port}, {reuseaddr, true}],
-        cowboy_http_protocol, [{dispatch, Dispatch}]
+    {ok, _CowboyPid} = cowboy:start_http(CowboyID, 128,
+        [{port, Port}, {reuseaddr, true}],
+        [{dispatch, Dispatch}]
     ),
 
     {noreply, State};
@@ -113,7 +113,8 @@ code_change(_OldVsn, State, _Extra) ->
 
 -ifdef(TEST).
 
-setup() -> 
+setup() ->
+    nodelua:start(), 
     {ok,Pid} = nodelua:start_link("../scripts/main.lua"), 
     Pid.
     
@@ -150,7 +151,7 @@ websocket_server(LuaPid) ->
         OnInit -> OnInit
     end,
 
-    {ok, <<"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nSec-Websocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\nConnection: Upgrade\r\n\r\n">>} = gen_tcp:recv(Socket, 0),
+    {ok, <<"HTTP/1.1 101 Switching Protocols\r\nconnection: Upgrade\r\nUpgrade: websocket\r\nSec-Websocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n\r\n">>} = gen_tcp:recv(Socket, 0),
 
     % binary
     ok = gen_tcp:send(Socket, << 16#82, 16#85, 16#37, 16#fa, 16#21, 16#3d, 16#7f, 16#9f, 16#4d, 16#51, 16#59 >>),

@@ -28,13 +28,13 @@
 }).
 
 send_lua(Event, Data, Req1, State) ->
-	{Port, Req2} = cowboy_http_req:port(Req1),
+	{Port, Req2} = cowboy_req:port(Req1),
 	Message = [{type, type_websocket_server}, {socket, self()}, {port, Port}, {event, Event}, {data, Data}],
 	nlua:send(State#state.lua, Message),
 	Req2.
 
 init({tcp, http}, _Req, _Opts) ->
-    {upgrade, protocol, cowboy_http_websocket}.
+    {upgrade, protocol, cowboy_websocket}.
 
 websocket_init(_TransportName, Req1, Opts) ->
 	Lua = proplists:get_value(lua, Opts),
