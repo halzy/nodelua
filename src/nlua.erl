@@ -20,8 +20,11 @@
 
 -module(nlua).
 
--export([load/2, send/2]).
--export([load_core/2, send_core/2]).
+%% API.
+-export([load/2]).
+-export([send/2]).
+-export([load_core/2]).
+-export([send_core/2]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -29,10 +32,14 @@
 
 -on_load(init/0).
 
+-type lua_ref() :: any().
+-export_type([lua_ref/0]).
+
 -define(nif_stub, nif_stub_error(?LINE)).
 nif_stub_error(Line) ->
     erlang:nif_error({nif_not_loaded,module,?MODULE,line,Line}).
 
+-spec init() -> ok | {error, {atom(), string()}}.
 init() ->
     PrivDir = case code:priv_dir(?MODULE) of
                 {error, bad_name} ->
@@ -45,15 +52,19 @@ init() ->
     NumProcessors = erlang:system_info(logical_processors),
     erlang:load_nif(filename:join(PrivDir, ?MODULE), NumProcessors).
 
+-spec load(binary(), pid()) -> lua_ref().
 load(Script, OwnerPid) ->
     load_core(Script, OwnerPid).
 
+-spec send(lua_ref(), [{type | socket | port | event | data | pid | callback_id | reply, any()}]) -> ok | {error, string()}.
 send(Lua, Message) ->
     send_core(Lua, Message).
 
+-spec load_core(binary(), pid()) -> lua_ref().
 load_core(_Script, _OwnerPid) ->
     ?nif_stub.
 
+-spec send_core(lua_ref(), [{type | socket | port | event | data | pid | callback_id | reply, any()}]) -> ok | {error, string()}.
 send_core(_Ref, _Message) ->
     ?nif_stub.
 

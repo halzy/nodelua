@@ -27,16 +27,23 @@
 %% ------------------------------------------------------------------
 
 -export([start/0]).
--export([start_script/2, stop_script/1]).
--export([require/3, send/2, reply/2]).
+-export([start_script/2]).
+-export([stop_script/1]).
+-export([require/3]).
+-export([send/2]).
+-export([reply/2]).
 -export([start_link/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
 %% ------------------------------------------------------------------
 
--export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3]).
+-export([init/1]).
+-export([handle_call/3]).
+-export([handle_cast/2]).
+-export([handle_info/2]).
+-export([terminate/2]).
+-export([code_change/3]).
 
 -ifdef(TEST).
 -export([callback_test_process/1]).
@@ -93,9 +100,8 @@ send(Pid, Message) ->
 require(Pid, Path, Module) ->
 	gen_server:call(Pid, {require, Path, Module}).
 
-reply(LuaCallback, Response) ->
-    Lua = lists:nth(1, LuaCallback),
-    CallbackId = lists:nth(2, LuaCallback),
+%-spec send(lua_ref(), [{type | socket | port | event | data | pid | callback_id | reply, any()}]) -> ok | {error, string()}.
+reply([Lua,CallbackId], Response) ->
     nlua:send(Lua, [{type, reply}, {pid, self()}, {callback_id, CallbackId}, {reply, Response}]).
 
 %% ------------------------------------------------------------------
@@ -103,9 +109,13 @@ reply(LuaCallback, Response) ->
 %% ------------------------------------------------------------------
 
 init([{script, LuaScript}, {owner, Owner}]) ->
-	{ok, Script} = file:read_file(LuaScript),
-    {ok, LuaReference} = nlua:load(Script, self()),
-    {ok, #state{lua=LuaReference, owner=Owner}}.
+	case file:read_file(LuaScript) of
+        {ok, Script} ->
+            {ok, LuaReference} = nlua:load(Script, self()),
+            {ok, #state{lua=LuaReference, owner=Owner}};
+        {error, Message} ->
+            {stop, Message}
+    end.
 
 handle_call({require, Path, Module}, _From, State) ->
 	CallToken = erlang:make_ref(),
@@ -131,6 +141,7 @@ handle_cast(Msg, State) ->
     lager:error("nodelua:handle_cast(~p) called!", [Msg]),
     {noreply, State}.
 
+%% lua can only send messages, we recognize this one
 handle_info([<<"invoke">>,ModuleName,Args], State) ->
 	ModulePrefix = <<"nlua_">>,
 	LuaModule = << ModulePrefix/binary, ModuleName/binary >>,
@@ -144,6 +155,7 @@ handle_info([<<"invoke">>,ModuleName,Args], State) ->
 			ok
 	end,
 	{noreply, State};
+%% unrecognized messages from lua are passed to the 'owner'.
 handle_info(Info, State) ->
     State#state.owner ! Info,
     {noreply, State}.

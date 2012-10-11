@@ -18,6 +18,7 @@
 % ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 % OTHER DEALINGS IN THE SOFTWARE.
 
+%% @private
 -module(nlua_websocket_server).
 -behaviour(gen_server).
 -behaviour(nlua_module).
@@ -27,31 +28,29 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
-%% ------------------------------------------------------------------
-%% API Function Exports
-%% ------------------------------------------------------------------
-
--export([start_link/0]).
+%% API.
 -export([lua_call/1]).
 
-%% ------------------------------------------------------------------
-%% gen_server Function Exports
-%% ------------------------------------------------------------------
-
--export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3]).
+%% API.
+-export([start_link/0]).
+-export([init/1]).
+-export([handle_call/3]).
+-export([handle_cast/2]).
+-export([handle_info/2]).
+-export([terminate/2]).
+-export([code_change/3]).
 
 -record(state, {
     ports :: dict()
 }).
 
-%% ------------------------------------------------------------------
-%% API Function Definitions
-%% ------------------------------------------------------------------
+%% API.
 
+-spec start_link() -> {'ok',pid()}.
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
+-spec lua_call([{binary(),any()},...]) -> ok.
 lua_call(Message) ->
     Command = proplists:get_value(<<"command">>, Message),
     Args = proplists:get_value(<<"args">>, Message),
@@ -61,20 +60,18 @@ lua_call(Message) ->
 make_cowboy_id(Port) -> 
     lists:flatten(["websocket_server_",erlang:integer_to_list(Port)]).
 
-%% ------------------------------------------------------------------
-%% gen_server Function Definitions
-%% ------------------------------------------------------------------
-
+-spec init([]) -> {ok, #state{}}.
 init(_Args) ->
-    application:start(cowboy),
     {ok, #state{ports=dict:new()}}.
 
+-spec handle_call(stop, _, #state{}) -> {stop, normal, ok, #state{}}.
 handle_call(stop, _From, State) -> 
     {stop, normal, ok, State};
 handle_call(Request, _From, State) ->
     lager:error("lua_websocket_server:handle_call(~p) called!", [Request]),
     {reply, undefined, State}.
 
+-spec handle_cast({binary(), [{binary(), nlua:lua_ref() | integer()}]}, #state{}) -> {noreply, #state{}}.
 handle_cast({<<"new">>, Args}, State) ->
     Lua = proplists:get_value(<<"lua">>, Args),
     Port = erlang:round(proplists:get_value(<<"port">>, Args)),

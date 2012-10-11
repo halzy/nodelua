@@ -18,41 +18,51 @@
 % ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 % OTHER DEALINGS IN THE SOFTWARE.
 
+%% @private
 -module(nlua_ws_handler).
+-behaviour(cowboy_websocket_handler).
+
+%% API.
 -export([init/3]).
--export([websocket_init/3, websocket_handle/3,
-    websocket_info/3, websocket_terminate/3]).
+-export([websocket_init/3]).
+-export([websocket_handle/3]).
+-export([websocket_info/3]).
+-export([websocket_terminate/3]).
 
 -record(state, {
-    lua :: any()
+    lua :: nlua:lua_ref(),
+    port :: inet:port_number()
 }).
 
-send_lua(Event, Data, Req1, State) ->
-	{Port, Req2} = cowboy_req:port(Req1),
-	Message = [{type, type_websocket_server}, {socket, self()}, {port, Port}, {event, Event}, {data, Data}],
-	nlua:send(State#state.lua, Message),
-	Req2.
+send_lua(Event, Data, Req, State) ->
+	Message = [{type, type_websocket_server}, {socket, self()}, {port, State#state.port}, {event, Event}, {data, Data}],
+	case nlua:send(State#state.lua, Message) of
+        ok -> 
+            {ok, Req, State, hibernate};
+        {error, ErrorMessage} -> 
+            lager:error("Error sending to lua: ~p", [ErrorMessage]),
+            {shutdown, Req}
+    end.
 
 init({tcp, http}, _Req, _Opts) ->
     {upgrade, protocol, cowboy_websocket}.
 
-websocket_init(_TransportName, Req1, Opts) ->
+websocket_init(_TransportName, Req, Opts) ->
 	Lua = proplists:get_value(lua, Opts),
-	State = #state{lua=Lua},
-	Req2 = send_lua(init, <<"">>, Req1, State),
-    {ok, Req2, #state{lua=Lua}}.
+    {Port, Req1} = cowboy_req:port(Req),
+	State = #state{lua=Lua,port=Port},
+	send_lua(init, <<"">>, cowboy_req:compact(Req1), State).
 
 websocket_handle({text, Data}, Req, State) ->
-	ReqSend = send_lua(data, Data, Req, State),
-	{ok, ReqSend, State};
+	send_lua(data, Data, Req, State);
 websocket_handle({binary, Data}, Req, State) ->
-	ReqSend = send_lua(data, Data, Req, State),
-	{ok, ReqSend, State};
+	send_lua(data, Data, Req, State);
 websocket_handle({ping, _Data}, Req, State) ->
-	{ok, Req, State};
+	{ok, Req, State, hibernate};
 websocket_handle({pong, _Data}, Req, State) ->
-	{ok, Req, State}.
+	{ok, Req, State, hibernate}.
 
+%% API for lua -- lua sends us messages
 websocket_info([{<<"bin">>, Msg}], Req, State) ->
 	{reply, {binary, Msg}, Req, State};
 websocket_info([{<<"text">>, Msg}], Req, State) ->
