@@ -133,7 +133,8 @@ static int next_message(lua_State* lua)
 	}
 	else
 	{
-		lua_pushnil(lua);
+		// if we have no messages, we yield
+		return lua_yieldk (lua, 0, 0, next_message);
 	}
 
 	// stack: nil || message

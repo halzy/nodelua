@@ -89,14 +89,11 @@ function main()
 
 	while true do
 		inbox = {}
-		while true do
-			local message = mailbox.next()
-			if message == nil then break end
+		local message = mailbox.next()
 
-			-- check for certain types of message (load, kill, etc)
-			-- save the message into a table to give the script
-			mail_sorter[message.type](message)
-		end
+		-- check for certain types of message (load, kill, etc)
+		-- save the message into a table to give the script
+		mail_sorter[message.type](message)
 
 		-- run the script if we have one, giving it the messages
 		if( update_function and 0 ~= #inbox) then
@@ -110,8 +107,6 @@ function main()
 			end
 			return;
 		end
-
-		coroutine.yield()
 	end
 end
 

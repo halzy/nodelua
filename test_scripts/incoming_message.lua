@@ -37,18 +37,14 @@ end
 
 function main()
 	while true do
-		while true do
-			local message = mailbox.next()
-			if message == nil then break end
-			if 'table' == type(message) then
-				local pid = message["pid"]
-				local msg = message.data
-				if pid then
-					mailbox.send(pid, msg)
-				end
+		local message = mailbox.next()
+		if 'table' == type(message) then
+			local pid = message["pid"]
+			local msg = message.data
+			if pid then
+				mailbox.send(pid, msg)
 			end
 		end
-		coroutine.yield()
 	end
 end
 
