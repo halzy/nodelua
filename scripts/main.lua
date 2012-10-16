@@ -74,7 +74,7 @@ function main()
 		local reply = message.reply
 		local callback = mailbox.async_callbacks[callback_id];
 		mailbox.async_callbacks[callback_id] = nil;
-		callback(reply);
+		assert(pcall(callback, reply))
 	end
 
 	local function register_type(name, callback)
@@ -103,7 +103,7 @@ function main()
 		-- somehow let the script send messages
 		if( mailbox.shutting_down() ) then
 			if( shutdown_function ) then 
-				shutdown_function()
+				assert(pcall(shutdown_function))
 			end
 			return;
 		end
