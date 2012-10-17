@@ -68,7 +68,7 @@ function main()
 			table.insert(response, {error=behavior})
 		end
 
-		mailbox.send(message.pid, response)
+		mailbox.send(mailbox.parent(), response)
 	end
 	function mail_sorter.reply(message)
 		local callback_id = message.callback_id

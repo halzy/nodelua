@@ -119,7 +119,7 @@ init([{script, LuaScript}, {owner, Owner}]) ->
 
 handle_call({require, Path, Module}, _From, State) ->
 	CallToken = erlang:make_ref(),
-    nlua:send( State#state.lua, [{type, require}, {pid, self()}, {token, CallToken}, {path, Path}, {module, Module}]),
+    nlua:send( State#state.lua, [{type, require}, {token, CallToken}, {path, Path}, {module, Module}]),
     receive
     	[CallToken,[{<<"error">>,Message}]] ->
             lager:warning("Script Error:~n~p~n", [binary_to_list(Message)]),
@@ -219,7 +219,8 @@ run_callback(LuaPid) ->
     EchoPid = spawn(?MODULE, callback_test_process, [self()]),
 	{ok, _} = ?MODULE:send(LuaPid, [{echo, EchoPid}]),
     Result = receive
-       Data -> Data
+       Data -> 
+            Data
     end,
     EchoPid ! die,
     ?_assertEqual( <<"async-test">>, Result).
