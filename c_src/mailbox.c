@@ -128,16 +128,44 @@ static int next_message(lua_State* lua)
 	int had_message  = message_queue_pop( messages, &message);
 	if(had_message)
 	{
+		lua_pushboolean( lua, 1 );
 		ErlNifEnv* env = message_queue_process_getenv( messages );
 		terminator_tolua(lua, message, env, resource_type);
 	}
 	else
 	{
-		// if we have no messages, we yield
-		return lua_yieldk (lua, 0, 0, next_message);
+		erllua_ptr erllua = (erllua_ptr) get_erllua( lua );
+		int shutting_down = erllua_shutting_down(erllua);
+		if(shutting_down)
+		{
+			// if we are shutting down, return nil, nil
+			lua_pushnil( lua );
+			lua_pushnil( lua );
+		}
+		else
+		{
+			// if we have no messages, we yield
+			return lua_yieldk (lua, 0, 0, next_message);
+		}
 	}
 
-	// stack: nil || message
+	// stack: true, message | nil, nil
+	assert(lua_gettop(lua) == top+2);
+	return 2;
+}
+
+static int iterator(lua_State* lua)
+{
+	assert(NULL != lua);
+	int top = lua_gettop(lua);
+
+	lua_pushvalue(lua, lua_upvalueindex(1));
+	lua_pushvalue(lua, lua_upvalueindex(2));
+	lua_pushvalue(lua, lua_upvalueindex(3));
+	lua_pushvalue(lua, lua_upvalueindex(4));
+
+	lua_pushcclosure( lua, next_message, 4);
+
 	assert(lua_gettop(lua) == top+1);
 	return 1;
 }
@@ -229,7 +257,7 @@ static int get_parent(lua_State* lua)
 
 
 static const struct luaL_Reg mailbox_funcs [] = {
-	{"next", next_message},
+	{"iterator", iterator},
 	{"send", send_message},
 	{"self", get_self},
 	{"parent", get_parent},
@@ -250,14 +278,14 @@ LUALIB_API int luaopen_mailbox(lua_State *lua)
 
 	luaL_newlibtable(lua, mailbox_funcs);
 
-	lua_pushvalue(lua, lua_upvalueindex(1)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
-	lua_pushvalue(lua, lua_upvalueindex(2)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
-	lua_pushvalue(lua, lua_upvalueindex(3)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
-	lua_pushvalue(lua, lua_upvalueindex(4)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushvalue(lua, lua_upvalueindex(1)); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushvalue(lua, lua_upvalueindex(2)); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushvalue(lua, lua_upvalueindex(3)); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushvalue(lua, lua_upvalueindex(4)); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
 
 	// setfuncs will take the items between the table and the 
 	// top and make them upvalues for all functions (lua 5.2)
-	luaL_setfuncs(lua, mailbox_funcs, 4); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
+	luaL_setfuncs(lua, mailbox_funcs, 4); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
 	
 	assert(lua_gettop(lua) == top+1);
 	return 1;
@@ -270,11 +298,11 @@ LUALIB_API int do_open_mailbox(lua_State *lua)
 	assert(NULL != lua);
 	int top = lua_gettop(lua);
 	
-	lua_pushvalue(lua, lua_upvalueindex(1)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
-	lua_pushvalue(lua, lua_upvalueindex(2)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
-	lua_pushvalue(lua, lua_upvalueindex(3)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
-	lua_pushvalue(lua, lua_upvalueindex(4)); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
-	lua_pushcclosure(lua, luaopen_mailbox, 4); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushvalue(lua, lua_upvalueindex(1)); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushvalue(lua, lua_upvalueindex(2)); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushvalue(lua, lua_upvalueindex(3)); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushvalue(lua, lua_upvalueindex(4)); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushcclosure(lua, luaopen_mailbox, 4); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
 
 	lua_pushliteral(lua, "mailbox"); /* argument to open function */
 	lua_call(lua, 1, 1);  /* open module */
@@ -310,11 +338,11 @@ void register_mailbox(lua_State *lua, erllua_ptr erllua, message_queue_ptr messa
 	int registry = lua_gettop(lua);
 
 	lua_pushliteral(lua, "mailbox");
-	lua_pushlightuserdata(lua, message_queue); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
-	lua_pushlightuserdata(lua, erllua); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
-	lua_pushlightuserdata(lua, erl_resource_type); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
-	lua_pushlightuserdata(lua, state_work); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
-	lua_pushcclosure(lua, do_open_mailbox, 4); // matches do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushlightuserdata(lua, message_queue); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushlightuserdata(lua, erllua); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushlightuserdata(lua, erl_resource_type); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushlightuserdata(lua, state_work); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
+	lua_pushcclosure(lua, do_open_mailbox, 4); // matches iterator, do_open_mailbox, register_mailbox, and luaopen_mailbox
 	lua_settable(lua, registry);
 
 	lua_settop(lua, top);

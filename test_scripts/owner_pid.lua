@@ -23,8 +23,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 require "mailbox"
 
 function main()
-	while true do
-		local message = mailbox.next()
+    for status, message in mailbox.iterator() do
 		mailbox.send(mailbox.parent(), mailbox.parent())
 	end
 end

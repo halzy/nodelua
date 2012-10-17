@@ -23,8 +23,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 require "mailbox"
 
 function main()
-	while true do
-		mailbox.next()
+    for status, message in mailbox.iterator() do
 	end
 end
 

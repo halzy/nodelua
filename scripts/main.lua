@@ -33,15 +33,16 @@ local function sendasync(pid, msg, callback)
 end
 mailbox.sendasync = sendasync
 
-
 function main()
-	local inbox = {}
 	local update_function = nil
 	local shutdown_function = nil;
 
 	local mail_sorter = {}
 	function mail_sorter.mail(message) 
-		table.insert(inbox, message.data) 
+		-- run the script if we have one, giving it the messages
+		if( update_function ) then
+			assert(pcall(update_function, message.data))
+		end
 	end
 	function mail_sorter.require(message) 
 		local new_path = {}
@@ -87,27 +88,17 @@ function main()
 	end
 	mailbox.register_type = register_type
 
-	while true do
-		inbox = {}
-		local message = mailbox.next()
-
+	for status, message in mailbox.iterator() do
 		-- check for certain types of message (load, kill, etc)
 		-- save the message into a table to give the script
 		mail_sorter[message.type](message)
-
-		-- run the script if we have one, giving it the messages
-		if( update_function and 0 ~= #inbox) then
-			assert(pcall(update_function, inbox))
-		end
-
-		-- somehow let the script send messages
-		if( mailbox.shutting_down() ) then
-			if( shutdown_function ) then 
-				assert(pcall(shutdown_function))
-			end
-			return;
-		end
 	end
+
+	-- somehow let the script send messages
+	if( shutdown_function ) then 
+		assert(pcall(shutdown_function))
+	end
+
 end
 
 main()

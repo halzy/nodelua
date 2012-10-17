@@ -36,8 +36,7 @@ local function dump(o)
 end
 
 function main()
-	while true do
-		local message = mailbox.next()
+    for status, message in mailbox.iterator() do
 		if 'table' == type(message) then
 			local pid = message["pid"]
 			local msg = message.data

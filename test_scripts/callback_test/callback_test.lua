@@ -41,11 +41,9 @@ local function callback(result)
 	mailbox.send(result.pid, "async-test")
 end
 
-local function update(inbox)
-	for k,v in pairs(inbox) do
-		if v.echo then
-			mailbox.sendasync(v.echo, "sending async", callback)
-		end
+local function update(message)
+	if message.echo then
+		mailbox.sendasync(message.echo, "sending async", callback)
 	end
 end; M.update = update
 
