@@ -51,6 +51,7 @@ local function on_init( socket )
 	mailbox.send(mailbox.parent(), "on_init")
 	mailbox.send(socket, "testing bogus message sending")
 end
+
 local function on_data( socket, data )
 	if "Helln" == data then
 		websocket_server.send_binary( socket, "goodbye")
@@ -59,10 +60,12 @@ local function on_data( socket, data )
 	end
 	mailbox.send(mailbox.parent(), "on_data")
 end
+
 local function on_terminate( socket )
 	mailbox.send(mailbox.parent(), "on_terminate")
 end
 
+-- this port number must match nlua_websocket_server
 local server = websocket_server.new(8080, on_init, on_data, on_terminate);
 
 return M

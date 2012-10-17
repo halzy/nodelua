@@ -33,7 +33,7 @@ local function delete(port)
 	M.on_init_callbacks[port] = nil
 	M.on_data_callbacks[port] = nil
 	M.on_terminate_callbacks[port] = nil
-	mailbox.send(mailbox.parent(), {"invoke",module_name,{command="delete",port=8080}})
+	mailbox.send(mailbox.parent(), {"invoke",module_name,{command="delete",port=port}})
 end; M.delete = delete;
 
 local function new(port, on_init, on_data, on_terminate)
@@ -48,7 +48,7 @@ local function new(port, on_init, on_data, on_terminate)
 	M.on_data_callbacks[port] = on_data
 	M.on_terminate_callbacks[port] = on_terminate
 
-	mailbox.send(mailbox.parent(), {"invoke",module_name,{command="new",args={lua=mailbox.self(), port=8080}}})
+	mailbox.send(mailbox.parent(), {"invoke",module_name,{command="new",args={lua=mailbox.self(), port=port}}})
 end; M.new = new;
 
 local function send_text(socket, message)
