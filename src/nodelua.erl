@@ -32,7 +32,7 @@
 -export([boot/3]).
 -export([send/2]).
 -export([reply/2]).
--export([start_link/1]).
+-export([start_link/2]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -51,7 +51,7 @@
 -endif.
 
 -record(state, {
-	lua :: reference(),
+	lua :: nlua:lua_ref(),
     owner :: pid()
 }).
 
@@ -74,7 +74,7 @@ start_ok(App, {error, Reason}) ->
 -spec start_script(any(), nonempty_string()) -> {ok, pid()}.
 start_script(Ref, LuaScript) ->
     supervisor:start_child(nodelua_sup, 
-        {{?MODULE, Ref}, {?MODULE, start_link, [LuaScript]}, 
+        {{?MODULE, Ref}, {?MODULE, start_link, [LuaScript, self()]}, 
             permanent, 5000, worker, [?MODULE]}).
 
 -spec stop_script(any()) -> ok | {error, not_found}.
@@ -86,9 +86,9 @@ stop_script(Ref) ->
             {error, Reason}
     end.
 
--spec start_link(nonempty_string()) -> {ok, pid()}.
-start_link(LuaScript) ->
-    gen_server:start_link(?MODULE, [{script, LuaScript}, {owner, self()}], []).
+-spec start_link(nonempty_string(), pid()) -> {ok, pid()}.
+start_link(LuaScript, Owner) ->
+    gen_server:start_link(?MODULE, [{script, LuaScript}, {owner, Owner}], []).
 
 -spec send(pid(), term()) -> {ok, reference()} | {error, string()}.
 send(Pid, Message) ->
@@ -177,11 +177,11 @@ code_change(_OldVsn, State, _Extra) ->
 
 setup() -> 
     ?MODULE:start(),
-    {ok,Pid} = ?MODULE:start_script(test, "../scripts/main.lua"),
+    {ok,Pid} = ?MODULE:start_script(test_nodelua, "../scripts/main.lua"),
     Pid.
     
 cleanup(_Pid) ->
-    ?MODULE:stop_script(test).
+    ?MODULE:stop_script(test_nodelua).
 
 main_test_() ->
     {foreach,

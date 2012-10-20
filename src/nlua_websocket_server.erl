@@ -112,11 +112,11 @@ code_change(_OldVsn, State, _Extra) ->
 
 setup() ->
     nodelua:start(), 
-    {ok,Pid} = nodelua:start_link("../scripts/main.lua"), 
+    {ok,Pid} = nodelua:start_script(test_websocket_server, "../scripts/main.lua"), 
     Pid.
     
-cleanup(Pid) ->
-    gen_server:call(Pid, stop).
+cleanup(_Pid) ->
+    nodelua:stop_script(test_websocket_server).
 
 main_test_() ->
     {foreach,
