@@ -259,8 +259,8 @@ static int get_parent(lua_State* lua)
 static const struct luaL_Reg mailbox_funcs [] = {
 	{"iterator", iterator},
 	{"send", send_message},
-	{"self", get_self},
-	{"parent", get_parent},
+	{"self", get_self},			// script reference
+	{"parent", get_parent},		// pid of erlang parent
 	{"shutting_down", shutting_down},
 	{NULL, NULL}
 };
