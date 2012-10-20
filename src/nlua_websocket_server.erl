@@ -144,7 +144,7 @@ websocket_server(LuaPid) ->
     Request = make_ws_request("localhost", 8080, "/"),
     ok = gen_tcp:send(Socket, Request),
 
-    <<"on_init">> = receive
+    {lua_message, LuaPid, <<"on_init">>} = receive
         OnInit -> OnInit
     end,
 
@@ -152,7 +152,7 @@ websocket_server(LuaPid) ->
 
     % binary
     ok = gen_tcp:send(Socket, << 16#82, 16#85, 16#37, 16#fa, 16#21, 16#3d, 16#7f, 16#9f, 16#4d, 16#51, 16#59 >>),
-    <<"on_data">> = receive
+    {lua_message, LuaPid, <<"on_data">>} = receive
         OnData1 -> OnData1
     end,
     % binary-response
@@ -160,7 +160,7 @@ websocket_server(LuaPid) ->
 
     % text
     ok = gen_tcp:send(Socket, << 16#81, 16#85, 16#37, 16#fa, 16#21, 16#3d, 16#7f, 16#9f, 16#4d, 16#51, 16#60 >>),
-    <<"on_data">> = receive
+    {lua_message, LuaPid, <<"on_data">>} = receive
         OnData2 -> OnData2
     end,
     % binary-response
@@ -175,7 +175,7 @@ websocket_server(LuaPid) ->
     {ok, << 1:1, 0:3, 8:4, 0:8 >>} = gen_tcp:recv(Socket, 0, 6000),
     {error, closed} = gen_tcp:recv(Socket, 0, 6000),
 
-    <<"on_terminate">> = receive
+    {lua_message, LuaPid, <<"on_terminate">>} = receive
         OnTerminate -> OnTerminate
     end,
 

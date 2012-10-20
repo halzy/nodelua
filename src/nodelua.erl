@@ -156,8 +156,8 @@ handle_info([<<"invoke">>,ModuleName,Args], State) ->
 	end,
 	{noreply, State};
 %% unrecognized messages from lua are passed to the 'owner'.
-handle_info(Info, State) ->
-    State#state.owner ! Info,
+handle_info(Message, State) ->
+    State#state.owner ! {lua_message, self(), Message},
     {noreply, State}.
 
 terminate(_Reason, _State) ->
