@@ -247,7 +247,7 @@ static int enqueue_work_cas(WORK_STATE compare_state, WORK_STATE enqueue_state, 
 static void resource_gc(ErlNifEnv* env, void* arg)
 {
 	// !!! This function is not allowed to call any
-	// !!! term making functions !!!
+	// !!! erlang term making functions !!!
 
 	// TODO @@@ notify the script that it will be destroyed
 	// and that it has one last chance to run before it 
