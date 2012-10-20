@@ -127,8 +127,6 @@ handle_call({boot, Path, Module}, _From, State) ->
     	[CallToken] -> 
     		{reply, ok, State}
     end;
-handle_call(stop, _From, State) -> 
-    {stop, normal, ok, State};
 handle_call(Request, _From, State) ->
     lager:error("nodelua:handle_call(~p) called!", [Request]),
     {reply, undefined, State}.

@@ -64,9 +64,6 @@ make_cowboy_id(Port) ->
 init(_Args) ->
     {ok, #state{ports=dict:new()}}.
 
--spec handle_call(stop, _, #state{}) -> {stop, normal, ok, #state{}}.
-handle_call(stop, _From, State) -> 
-    {stop, normal, ok, State};
 handle_call(Request, _From, State) ->
     lager:error("lua_websocket_server:handle_call(~p) called!", [Request]),
     {reply, undefined, State}.
@@ -178,7 +175,6 @@ websocket_server(LuaPid) ->
         OnTerminate -> OnTerminate
     end,
 
-    gen_server:call(ServerPid, stop),
 
     ?_assertEqual(ok, ok).
 
