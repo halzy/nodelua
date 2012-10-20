@@ -137,8 +137,8 @@ make_ws_request(Host, Port, Path) ->
     "Sec-WebSocket-Version: 13\r\n\r\n".
 
 websocket_server(LuaPid) ->
-	{ok, ServerPid} = nlua_websocket_server:start_link(),
-	ok = nodelua:require(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>], <<"websocket_server_test">>),
+    nodelua:start(),
+	ok = nodelua:boot(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>], <<"websocket_server_test">>),
 
     {ok, Socket} = gen_tcp:connect("127.0.0.1", 8080, [binary, {active, false}]),
     Request = make_ws_request("localhost", 8080, "/"),

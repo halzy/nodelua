@@ -44,7 +44,7 @@ function main()
 			assert(pcall(update_function, message.data))
 		end
 	end
-	function mail_sorter.require(message) 
+	function mail_sorter.boot(message) 
 		local new_path = {}
 		for index, module_path in ipairs(message.path) do
 			table.insert(new_path, module_path .. "/?.lua;" .. module_path .. "/?/init.lua;" .. module_path .. "/?/?.lua")

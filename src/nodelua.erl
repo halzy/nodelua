@@ -29,7 +29,7 @@
 -export([start/0]).
 -export([start_script/2]).
 -export([stop_script/1]).
--export([require/3]).
+-export([boot/3]).
 -export([send/2]).
 -export([reply/2]).
 -export([start_link/1]).
@@ -96,9 +96,9 @@ send(Pid, Message) ->
 	ok = gen_server:cast(Pid, {send, self(), CallToken, Message}),
 	{ok, CallToken}.
 
--spec require(pid(), [binary()], binary()) -> ok.
-require(Pid, Path, Module) ->
-	gen_server:call(Pid, {require, Path, Module}).
+-spec boot(pid(), [binary()], binary()) -> ok.
+boot(Pid, Path, Module) ->
+	gen_server:call(Pid, {boot, Path, Module}).
 
 %-spec send(lua_ref(), [{type | socket | port | event | data | pid | callback_id | reply, any()}]) -> ok | {error, string()}.
 reply([Lua,CallbackId], Response) ->
@@ -117,9 +117,9 @@ init([{script, LuaScript}, {owner, Owner}]) ->
             {stop, Message}
     end.
 
-handle_call({require, Path, Module}, _From, State) ->
+handle_call({boot, Path, Module}, _From, State) ->
 	CallToken = erlang:make_ref(),
-    nlua:send( State#state.lua, [{type, require}, {token, CallToken}, {path, Path}, {module, Module}]),
+    nlua:send( State#state.lua, [{type, boot}, {token, CallToken}, {path, Path}, {module, Module}]),
     receive
     	[CallToken,[{<<"error">>,Message}]] ->
             lager:warning("Script Error:~n~p~n", [binary_to_list(Message)]),
@@ -188,7 +188,7 @@ main_test_() ->
 		fun setup/0,
 		fun cleanup/1,
 		[
-			fun run_require_error/1,
+			fun run_boot_error/1,
 			fun run_callback/1,
             fun run_bogus_call/1,
             fun run_bogus_cast/1
@@ -201,8 +201,8 @@ run_bogus_call(Pid) ->
 run_bogus_cast(Pid) ->
     ?_assertEqual(gen_server:cast(Pid, bla), ok).
 
-run_require_error(Pid) ->
-	{error, <<Error:5/binary, _Message/binary>>} = require(Pid, [<<"../test_scripts">>], <<"require_error">>),
+run_boot_error(Pid) ->
+	{error, <<Error:5/binary, _Message/binary>>} = boot(Pid, [<<"../test_scripts">>], <<"boot_error">>),
     ?_assertEqual( <<"error">>, Error ).	
 
 callback_test_process(Pid) ->
@@ -215,7 +215,7 @@ callback_test_process(Pid) ->
     end.
 
 run_callback(LuaPid) ->
-	ok = ?MODULE:require(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>,<<"../test_scripts/callback_test">>], <<"callback_test">>),
+	ok = ?MODULE:boot(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>,<<"../test_scripts/callback_test">>], <<"callback_test">>),
     EchoPid = spawn(?MODULE, callback_test_process, [self()]),
 	{ok, _} = ?MODULE:send(LuaPid, [{echo, EchoPid}]),
     Result = receive
