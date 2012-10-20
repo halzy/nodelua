@@ -85,6 +85,15 @@ handle_cast({lua_call, <<"new">>, Args, LuaRef}, State) ->
         [{dispatch, Dispatch}]
     ),
 
+    % FIXME: update the state with used ports
+    {noreply, State};
+handle_cast({lua_call, <<"delete">>, Args, _LuaRef}, State) ->
+    Port = proplists:get_value(<<"port">>, Args),
+
+    CowboyID = make_cowboy_id(Port),
+    cowboy:stop_listener(CowboyID),
+    
+    % FIXME: update the state with used ports
     {noreply, State};
 handle_cast(Msg, State) ->
     lager:error("lua_websocket_server:handle_cast(~p) called!", [Msg]),

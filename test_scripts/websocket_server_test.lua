@@ -37,10 +37,8 @@ local function dump(o)
 	end
 end
 
-local function update(inbox)
-	print("websocket_server_test:update(): " .. dump(inbox));
-	for k,v in pairs(inbox) do
-	end
+local function update(message)
+	print("websocket_server_test:update(): " .. dump(message));
 end; M.update = update
 
 local function shutdown()
@@ -63,6 +61,7 @@ end
 
 local function on_terminate( socket )
 	mailbox.send(mailbox.parent(), "on_terminate")
+	websocket_server.delete(8080)
 end
 
 -- this port number must match nlua_websocket_server
