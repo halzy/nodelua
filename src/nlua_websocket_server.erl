@@ -189,12 +189,11 @@ make_cowboy_id_test_() ->
         ?_assertEqual("websocket_server_80", make_cowboy_id(80))
     ].
 
+%% call functions that we do not use
 test_unsupported_test_() ->
-    {ok, ServerPid} = nlua_websocket_server:start_link(),
-    ServerPid ! bla,
     [
-        ?_assertEqual(gen_server:call(ServerPid, bla), undefined),
-        ?_assertEqual(gen_server:cast(ServerPid, bla), ok),
+        ?_assertEqual(gen_server:call(nlua_websocket_server, bla), undefined),
+        ?_assertEqual(gen_server:cast(nlua_websocket_server, bla), ok),
         ?_assertEqual(code_change(bla, state, bla), {ok, state})
     ].
 

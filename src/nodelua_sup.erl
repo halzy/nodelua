@@ -30,4 +30,8 @@ start_link() ->
 
 -spec init([]) -> {'ok',{{'one_for_one',10,10},[]}}.
 init([]) ->
-	{ok, {{one_for_one, 10, 10}, []}}.
+    Procs = [
+        {nlua_websocket_server, {nlua_websocket_server, start_link, []}, permanent, 5000, worker, [nlua_websocket_server]}
+    ],
+    {ok, {{one_for_one, 10, 10}, Procs}}.
+
