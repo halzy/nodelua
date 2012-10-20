@@ -150,7 +150,7 @@ handle_info([<<"invoke">>,ModuleName,Args], State) ->
 	case IsModule of
 		true ->
 			Module = binary_to_existing_atom(LuaModule, latin1),
-			erlang:apply(Module, lua_call, [Args]);
+			erlang:apply(Module, lua_call, [State#state.lua, Args]);
 		false ->
 			ok
 	end,

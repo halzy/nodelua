@@ -29,7 +29,7 @@
 -endif.
 
 %% API.
--export([lua_call/1]).
+-export([lua_call/2]).
 
 %% API.
 -export([start_link/0]).
@@ -50,11 +50,11 @@
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
--spec lua_call([{binary(),any()},...]) -> ok.
-lua_call(Message) ->
+-spec lua_call(nlua:lua_ref(), [{binary(),any()},...]) -> ok.
+lua_call(LuaRef, Message) ->
     Command = proplists:get_value(<<"command">>, Message),
     Args = proplists:get_value(<<"args">>, Message),
-    gen_server:cast(?SERVER, {Command, Args}).
+    gen_server:cast(?SERVER, {lua_call, Command, Args, LuaRef}).
 
 -spec make_cowboy_id(non_neg_integer()) -> list().
 make_cowboy_id(Port) -> 
@@ -72,15 +72,14 @@ handle_call(Request, _From, State) ->
     {reply, undefined, State}.
 
 -spec handle_cast({binary(), [{binary(), nlua:lua_ref() | integer()}]}, #state{}) -> {noreply, #state{}}.
-handle_cast({<<"new">>, Args}, State) ->
-    Lua = proplists:get_value(<<"lua">>, Args),
-    Port = erlang:round(proplists:get_value(<<"port">>, Args)),
+handle_cast({lua_call, <<"new">>, Args, LuaRef}, State) ->
+    Port = proplists:get_value(<<"port">>, Args),
 
     CowboyID = make_cowboy_id(Port),
 
     Dispatch = [
         %% {Host, list({Path, Handler, Opts})}
-        {'_', [{'_', nlua_ws_handler, [{lua, Lua}]}]}
+        {'_', [{'_', nlua_ws_handler, [{lua, LuaRef}]}]}
     ],
 
     %% Name, NbAcceptors, Transport, TransOpts, Protocol, ProtoOpts

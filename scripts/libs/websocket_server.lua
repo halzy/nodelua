@@ -48,7 +48,7 @@ local function new(port, on_init, on_data, on_terminate)
 	M.on_data_callbacks[port] = on_data
 	M.on_terminate_callbacks[port] = on_terminate
 
-	mailbox.send(mailbox.parent(), {"invoke",module_name,{command="new",args={lua=mailbox.self(), port=port}}})
+	mailbox.send(mailbox.parent(), {"invoke",module_name,{command="new",args={port=port}}})
 end; M.new = new;
 
 local function send_text(socket, message)

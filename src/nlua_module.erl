@@ -20,4 +20,4 @@
 
 -module(nlua_module).
 
--callback lua_call([{binary(),any()},...]) -> ok.
+-callback lua_call(nlua:lua_ref(), [{binary(),any()},...]) -> ok.
