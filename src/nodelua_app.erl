@@ -26,12 +26,63 @@
 -export([start/2]).
 -export([stop/1]).
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
 %% API.
 
--spec start(atom(), application:restart_type()) -> ok | {error, term()}.
+config(Name, Default) ->
+    {ok, ApplicationName} = application:get_application(),
+    case application:get_env(ApplicationName, Name) of
+        {ok, Value} -> Value;
+        undefined -> Default
+    end.
+
+-spec start(atom(), application:restart_type()) -> {ok, pid()} | {error, term()}.
 start(_StartType, _StartArgs) ->
-	nodelua_sup:start_link().
+	StartResponse = nodelua_sup:start_link(),
+    start_scripts(config(scripts, [])),
+    StartResponse.
+
+start_scripts([{script, Parameters}|Tail]) ->
+    Name = proplists:get_value(name, Parameters),
+    File = proplists:get_value(file, Parameters),
+    Args = proplists:get_value(args, Parameters),
+    {ok, _Pid} = nodelua:start_script(Name, File, Args),
+    start_scripts(Tail);
+start_scripts([]) ->
+    ok.
 
 -spec stop(atom()) -> ok | {error, term()}.
 stop(_State) ->
 	ok.
+
+%% ===================================================================
+%% EUnit tests
+%% ===================================================================
+-ifdef(TEST).
+
+-define(APPLICATION, nodelua).
+
+app_start_test() ->
+    application:set_env(?APPLICATION, scripts, 
+                [{script, [
+                    {name, main_script}, 
+                    {file, "../scripts/main.lua"}, 
+                    {args, [{path, [<<"../test_scripts">>]}, {module, <<"app_start">>}]}
+                ]}]),
+    nodelua:start(), 
+    {ok, Pid} = nodelua:lookup_script(main_script),
+    nodelua:set_owner(Pid, self()),
+    nodelua:send(Pid, ok),
+
+    receive
+        Data -> ?assertEqual({lua_message,Pid,<<"ok">>}, Data)
+    end,
+
+    nodelua:stop_script(main_script),
+    nodelua:stop().
+    
+-endif.
+

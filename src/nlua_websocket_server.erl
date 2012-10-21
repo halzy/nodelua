@@ -175,8 +175,9 @@ websocket_server_test() ->
     %gen_server:call(ServerPid, stop),
 
     nodelua:stop_script(test_websocket_server),
+    nodelua:stop(),
 
-    ?_assertEqual(ok, ok).
+    ?assertEqual(ok, ok).
 
 make_cowboy_id_test_() ->
     [
@@ -185,11 +186,11 @@ make_cowboy_id_test_() ->
     ].
 
 %% call functions that we do not use
-test_unsupported_test_() ->
-    [
-        ?_assertEqual(gen_server:call(nlua_websocket_server, bla), undefined),
-        ?_assertEqual(gen_server:cast(nlua_websocket_server, bla), ok),
-        ?_assertEqual(code_change(bla, state, bla), {ok, state})
-    ].
+% test_unsupported_test_() ->
+%     [
+%         ?_assertEqual(gen_server:call(nlua_websocket_server, bla), undefined),
+%         ?_assertEqual(gen_server:cast(nlua_websocket_server, bla), ok),
+%         ?_assertEqual(code_change(bla, state, bla), {ok, state})
+%     ].
 
 -endif.

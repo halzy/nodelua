@@ -27,11 +27,15 @@
 %% ------------------------------------------------------------------
 
 -export([start/0]).
+-export([stop/0]).
 -export([start_script/3]).
 -export([stop_script/1]).
+-export([lookup_script/1]).
 -export([send/2]).
 -export([reply/2]).
+-export([set_owner/2]).
 -export([start_link/3]).
+
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -68,7 +72,8 @@ start_ok(App, {error, {not_started, Dep}}) ->
     start(App);
 start_ok(App, {error, Reason}) -> 
     erlang:error({app_start_failed, App, Reason}).
-
+stop() -> 
+    application:stop(nodelua).
 
 -spec start_script(any(), nonempty_string(), term()) -> {ok, pid()}.
 start_script(Ref, LuaScript, Args) ->
@@ -85,15 +90,27 @@ stop_script(Ref) ->
             {error, Reason}
     end.
 
+-spec lookup_script(atom()) -> {ok, pid()} | {error, term()}.
+lookup_script(Ref) ->
+    List = supervisor:which_children(nodelua_sup),
+    case lists:keyfind({?MODULE, Ref}, 1, List) of
+        false -> {error, no_script};
+        {_, Pid, _, _} -> {ok, Pid}
+    end.
+
 -spec start_link(nonempty_string(), pid(), term()) -> {ok, pid()}.
 start_link(LuaScript, Owner, Args) ->
     gen_server:start_link(?MODULE, [{script, LuaScript}, {owner, Owner}, {args, Args}], []).
 
--spec send(pid(), term()) -> {ok, reference()} | {error, string()}.
-send(Pid, Message) ->
+-spec send(pid() | atom(), term()) -> {ok, reference()} | {error, string()}.
+send(Pid, Message) when is_pid(Pid) ->
 	CallToken = erlang:make_ref(),
 	ok = gen_server:cast(Pid, {send, self(), CallToken, Message}),
 	{ok, CallToken}.
+
+-spec set_owner(pid(), pid()) -> {ok, pid()}.
+set_owner(Pid, Owner) when is_pid(Owner) ->
+    gen_server:call(Pid, {set_owner, Owner}).
 
 %-spec send(lua_ref(), [{type | socket | port | event | data | pid | callback_id | reply, any()}]) -> ok | {error, string()}.
 reply([Lua,CallbackId], Response) ->
@@ -128,6 +145,9 @@ boot_script(Args, State) ->
             {ok, State}
     end.
 
+handle_call({set_owner, Owner}, _From, State) ->
+    OldOwner = State#state.owner,
+    {reply, OldOwner, State#state{owner=Owner}};
 handle_call(Request, _From, State) ->
     lager:error("nodelua:handle_call(~p) called!", [Request]),
     {reply, undefined, State}.
@@ -156,6 +176,7 @@ handle_info([<<"invoke">>,ModuleName,Args], State) ->
 	{noreply, State};
 %% unrecognized messages from lua are passed to the 'owner'.
 handle_info(Message, State) ->
+    
     State#state.owner ! {lua_message, self(), Message},
     {noreply, State}.
 
@@ -178,21 +199,25 @@ bogus_call_test() ->
     ?MODULE:start(),
     {ok, Pid} = ?MODULE:start_script(test_nodelua, "../scripts/main.lua", []),
     ?assertEqual(gen_server:call(Pid, bla), undefined),
-    ?MODULE:stop_script(test_nodelua).
+    ?MODULE:stop_script(test_nodelua),
+    ?MODULE:stop().
     
 
 bogus_cast_test() ->
     ?MODULE:start(),
     {ok, Pid} = ?MODULE:start_script(test_nodelua, "../scripts/main.lua", []),
     ?assertEqual(gen_server:cast(Pid, bla), ok),
-    ?MODULE:stop_script(test_nodelua).
+    ?MODULE:stop_script(test_nodelua),
+    ?MODULE:stop().
 
 boot_error_test() ->
     ?MODULE:start(),
     Response = ?MODULE:start_script(test_nodelua, "../scripts/main.lua", [{path, [<<"../test_scripts">>]}, {module, <<"boot_error">>}]),
     ?MODULE:stop_script(test_nodelua),
 	{error, {<<Error:5/binary, _Message/binary>>, _}} = Response,
-    ?_assertEqual( <<"error">>, Error ).	
+    ?assertEqual( <<"error">>, Error ),
+    ?MODULE:stop().
+
 
 callback_test_process(Pid) ->
     receive
@@ -214,9 +239,10 @@ callback_test() ->
     end,
     EchoPid ! die,
     ?MODULE:stop_script(test_nodelua),
-    ?_assertEqual( <<"async-test">>, Result).
+    ?MODULE:stop(),
+    ?assertEqual( <<"async-test">>, Result).
 
 test_unsupported_test() ->
-    ?_assertEqual(code_change(bla, state, bla), {ok, state}).
+    ?assertEqual(code_change(bla, state, bla), {ok, state}).
 
 -endif.
