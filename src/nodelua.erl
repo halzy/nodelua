@@ -27,12 +27,11 @@
 %% ------------------------------------------------------------------
 
 -export([start/0]).
--export([start_script/2]).
+-export([start_script/3]).
 -export([stop_script/1]).
--export([boot/3]).
 -export([send/2]).
 -export([reply/2]).
--export([start_link/2]).
+-export([start_link/3]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -71,10 +70,10 @@ start_ok(App, {error, Reason}) ->
     erlang:error({app_start_failed, App, Reason}).
 
 
--spec start_script(any(), nonempty_string()) -> {ok, pid()}.
-start_script(Ref, LuaScript) ->
+-spec start_script(any(), nonempty_string(), term()) -> {ok, pid()}.
+start_script(Ref, LuaScript, Args) ->
     supervisor:start_child(nodelua_sup, 
-        {{?MODULE, Ref}, {?MODULE, start_link, [LuaScript, self()]}, 
+        {{?MODULE, Ref}, {?MODULE, start_link, [LuaScript, self(), Args]}, 
             permanent, 5000, worker, [?MODULE]}).
 
 -spec stop_script(any()) -> ok | {error, not_found}.
@@ -86,19 +85,15 @@ stop_script(Ref) ->
             {error, Reason}
     end.
 
--spec start_link(nonempty_string(), pid()) -> {ok, pid()}.
-start_link(LuaScript, Owner) ->
-    gen_server:start_link(?MODULE, [{script, LuaScript}, {owner, Owner}], []).
+-spec start_link(nonempty_string(), pid(), term()) -> {ok, pid()}.
+start_link(LuaScript, Owner, Args) ->
+    gen_server:start_link(?MODULE, [{script, LuaScript}, {owner, Owner}, {args, Args}], []).
 
 -spec send(pid(), term()) -> {ok, reference()} | {error, string()}.
 send(Pid, Message) ->
 	CallToken = erlang:make_ref(),
 	ok = gen_server:cast(Pid, {send, self(), CallToken, Message}),
 	{ok, CallToken}.
-
--spec boot(pid(), [binary()], binary()) -> ok.
-boot(Pid, Path, Module) ->
-	gen_server:call(Pid, {boot, Path, Module}).
 
 %-spec send(lua_ref(), [{type | socket | port | event | data | pid | callback_id | reply, any()}]) -> ok | {error, string()}.
 reply([Lua,CallbackId], Response) ->
@@ -108,25 +103,31 @@ reply([Lua,CallbackId], Response) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init([{script, LuaScript}, {owner, Owner}]) ->
+init([{script, LuaScript}, {owner, Owner}, {args, Args}]) ->
 	case file:read_file(LuaScript) of
         {ok, Script} ->
             {ok, LuaReference} = nlua:load(Script, self()),
-            {ok, #state{lua=LuaReference, owner=Owner}};
+            case boot_script(Args, #state{lua=LuaReference, owner=Owner}) of
+                {ok, State} -> {ok, State};
+                {error, Message} ->
+                    {stop, Message}
+            end;
         {error, Message} ->
             {stop, Message}
     end.
 
-handle_call({boot, Path, Module}, _From, State) ->
-	CallToken = erlang:make_ref(),
-    nlua:send( State#state.lua, [{type, boot}, {token, CallToken}, {path, Path}, {module, Module}]),
+-spec boot_script(term(), #state{}) -> ok | {stop, term()}.
+boot_script(Args, State) ->
+    CallToken = erlang:make_ref(),
+    nlua:send( State#state.lua, [{type, boot}, {token, CallToken}, {args, Args}]),
     receive
-    	[CallToken,[{<<"error">>,Message}]] ->
+        [CallToken,[{<<"error">>,Message}]] ->
             lager:warning("Script Error:~n~p~n", [binary_to_list(Message)]),
-    		{reply, {error, Message}, State};
-    	[CallToken] -> 
-    		{reply, ok, State}
-    end;
+            {error, Message};
+        [CallToken] -> 
+            {ok, State}
+    end.
+
 handle_call(Request, _From, State) ->
     lager:error("nodelua:handle_call(~p) called!", [Request]),
     {reply, undefined, State}.
@@ -173,34 +174,24 @@ code_change(_OldVsn, State, _Extra) ->
 %% ===================================================================
 -ifdef(TEST).
 
-setup() -> 
+bogus_call_test() ->
     ?MODULE:start(),
-    {ok,Pid} = ?MODULE:start_script(test_nodelua, "../scripts/main.lua"),
-    Pid.
+    {ok, Pid} = ?MODULE:start_script(test_nodelua, "../scripts/main.lua", []),
+    ?assertEqual(gen_server:call(Pid, bla), undefined),
+    ?MODULE:stop_script(test_nodelua).
     
-cleanup(_Pid) ->
+
+bogus_cast_test() ->
+    ?MODULE:start(),
+    {ok, Pid} = ?MODULE:start_script(test_nodelua, "../scripts/main.lua", []),
+    ?assertEqual(gen_server:cast(Pid, bla), ok),
     ?MODULE:stop_script(test_nodelua).
 
-main_test_() ->
-    {foreach,
-		fun setup/0,
-		fun cleanup/1,
-		[
-			fun run_boot_error/1,
-			fun run_callback/1,
-            fun run_bogus_call/1,
-            fun run_bogus_cast/1
-        ]
-	}.
-
-run_bogus_call(Pid) ->
-    ?_assertEqual(gen_server:call(Pid, bla), undefined).
-
-run_bogus_cast(Pid) ->
-    ?_assertEqual(gen_server:cast(Pid, bla), ok).
-
-run_boot_error(Pid) ->
-	{error, <<Error:5/binary, _Message/binary>>} = boot(Pid, [<<"../test_scripts">>], <<"boot_error">>),
+boot_error_test() ->
+    ?MODULE:start(),
+    Response = ?MODULE:start_script(test_nodelua, "../scripts/main.lua", [{path, [<<"../test_scripts">>]}, {module, <<"boot_error">>}]),
+    ?MODULE:stop_script(test_nodelua),
+	{error, {<<Error:5/binary, _Message/binary>>, _}} = Response,
     ?_assertEqual( <<"error">>, Error ).	
 
 callback_test_process(Pid) ->
@@ -212,8 +203,9 @@ callback_test_process(Pid) ->
             callback_test_process(Pid)
     end.
 
-run_callback(LuaPid) ->
-	ok = ?MODULE:boot(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>,<<"../test_scripts/callback_test">>], <<"callback_test">>),
+callback_test() ->
+    ?MODULE:start(),
+	{ok, LuaPid} = ?MODULE:start_script(test_nodelua, "../scripts/main.lua", [{path, [<<"../scripts/libs">>,<<"../test_scripts">>,<<"../test_scripts/callback_test">>]}, {module, <<"callback_test">>}]),
     EchoPid = spawn(?MODULE, callback_test_process, [self()]),
 	{ok, _} = ?MODULE:send(LuaPid, [{echo, EchoPid}]),
     Result = receive
@@ -221,11 +213,10 @@ run_callback(LuaPid) ->
             Data
     end,
     EchoPid ! die,
+    ?MODULE:stop_script(test_nodelua),
     ?_assertEqual( <<"async-test">>, Result).
 
-test_unsupported_test_() ->
-    [
-        ?_assertEqual(code_change(bla, state, bla), {ok, state})
-    ].
+test_unsupported_test() ->
+    ?_assertEqual(code_change(bla, state, bla), {ok, state}).
 
 -endif.

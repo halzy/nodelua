@@ -45,31 +45,36 @@ function main()
 		end
 	end
 	function mail_sorter.boot(message) 
-		local new_path = {}
-		for index, module_path in ipairs(message.path) do
-			table.insert(new_path, module_path .. "/?.lua;" .. module_path .. "/?/init.lua;" .. module_path .. "/?/?.lua")
-		end
-
-		package.cpath = "" -- do not allow for C module loading
-		package.path = table.concat( new_path, ";" )
-
-		local success, behavior = pcall(require, message.module)
-		if( success ) then
-			if( "function" == type(behavior.update) ) then
-				update_function = behavior.update
-			end
-			if( "function" == type(behavior.shutdown) ) then
-				shutdown_function = behavior.shutdown
-			end
-		end
-
+		local args = message.args
 		local response = {message.token}
-		if( not success ) then
-			table.insert(response, {error=behavior})
+
+		if args["path"] and args["module"] then
+			local new_path = {}
+			for index, module_path in ipairs(args.path) do
+				table.insert(new_path, module_path .. "/?.lua;" .. module_path .. "/?/init.lua;" .. module_path .. "/?/?.lua")
+			end
+
+			package.cpath = "" -- do not allow for C module loading
+			package.path = table.concat( new_path, ";" )
+
+			local loaded, behavior = pcall(require, args.module)
+			if( loaded ) then
+				if( "function" == type(behavior.update) ) then
+					update_function = behavior.update
+				end
+				if( "function" == type(behavior.shutdown) ) then
+					shutdown_function = behavior.shutdown
+				end
+			end
+
+			if( not loaded ) then
+				table.insert(response, {error=behavior})
+			end
 		end
 
-		mailbox.send(mailbox.parent(), response)
+		mailbox.send(mailbox.parent(), response)		
 	end
+
 	function mail_sorter.reply(message)
 		local callback_id = message.callback_id
 		local reply = message.reply

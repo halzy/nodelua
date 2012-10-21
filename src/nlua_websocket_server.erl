@@ -115,24 +115,6 @@ code_change(_OldVsn, State, _Extra) ->
 
 -ifdef(TEST).
 
-setup() ->
-    nodelua:start(), 
-    {ok,Pid} = nodelua:start_script(test_websocket_server, "../scripts/main.lua"), 
-    Pid.
-    
-cleanup(_Pid) ->
-    nodelua:stop_script(test_websocket_server).
-
-main_test_() ->
-    {foreach,
-		fun setup/0,
-		fun cleanup/1,
-		[
-			fun websocket_server/1
-		]
-	}.
-
-
 make_ws_request(Host, Port, Path) ->
     "GET "++ Path ++" HTTP/1.1\r\n" ++ 
     "Upgrade: WebSocket\r\nConnection: Upgrade\r\n" ++ 
@@ -141,9 +123,10 @@ make_ws_request(Host, Port, Path) ->
     "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" ++
     "Sec-WebSocket-Version: 13\r\n\r\n".
 
-websocket_server(LuaPid) ->
-    nodelua:start(),
-	ok = nodelua:boot(LuaPid, [<<"../scripts/libs">>,<<"../test_scripts">>], <<"websocket_server_test">>),
+websocket_server_test() ->
+    nodelua:start(), 
+
+    {ok, LuaPid} = nodelua:start_script(test_websocket_server, "../scripts/main.lua", [{path, [<<"../scripts/libs">>,<<"../test_scripts">>]}, {module, <<"websocket_server_test">>}]),
 
     {ok, Socket} = gen_tcp:connect("127.0.0.1", 8080, [binary, {active, false}]),
     Request = make_ws_request("localhost", 8080, "/"),
@@ -184,6 +167,14 @@ websocket_server(LuaPid) ->
         OnTerminate -> OnTerminate
     end,
 
+    % @@@ FIXME: stop message not supported
+    % have the cowboy server shut down somehow,
+    % perhaps tie it to the life of the lua script
+    % ? make the shutdown main.lua call shutdown on
+    % the websocket stuff too
+    %gen_server:call(ServerPid, stop),
+
+    nodelua:stop_script(test_websocket_server),
 
     ?_assertEqual(ok, ok).
 
