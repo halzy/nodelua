@@ -34,6 +34,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 #include <string.h>
 #include <assert.h>
 #include <math.h>
+#include <inttypes.h>
 
 #define TYPE_ERL_PID "mailbox.id"
 #define TYPE_ERL_REF "nodelua.terminator.ref"
